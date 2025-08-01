@@ -3,7 +3,33 @@ uuid = "d86fc70c-de9e-43b7-b4e7-3a87415113cf"
 authors = ["Albert Williams <albertbpwilliams@gmail.com> and contributors"]
 version = "1.0.0-DEV"
 
+[deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+GeoDatasets = "ddc7317b-88db-5cb5-a849-8449e5df04f9"
+PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SatelliteAnalysis = "101040f3-2a13-4d8c-b9b0-4a720fa906ce"
+SatelliteToolboxBase = "9e17983a-0463-41a7-9a16-1682db6d8b66"
+SatelliteToolboxPropagators = "c2b69894-ea78-4e2b-9ba6-cedbbc3d14d7"
+SatelliteToolboxTle = "7ff27aeb-5fff-4337-a9ee-a9fe6b7ed35e"
+SatelliteToolboxTransformations = "6b019ec1-7a1e-4f04-96c7-a9db1ca5514d"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
 [compat]
+CSV = "0.10.15"
+Dates = "1.11.0"
+Downloads = "1.6.0"
+GeoDatasets = "0.1.9"
+PyPlot = "2.11.6"
+Random = "1.11.0"
+SatelliteAnalysis = "0.3.8"
+SatelliteToolboxBase = "1.0.0"
+SatelliteToolboxPropagators = "1.0.0"
+SatelliteToolboxTle = "1.1.0"
+SatelliteToolboxTransformations = "1.0.0"
+StaticArrays = "1.9.14"
 julia = "1.6.7"
 
 [extras]
