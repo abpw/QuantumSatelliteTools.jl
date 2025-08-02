@@ -487,9 +487,6 @@ Create a FreespaceChannel with specified parameters.
 function FreespaceChannel(distance_m::Num64, elevation_angle_rad::Num64; min_altitude_m::Num64=0, conditions::Conditions=clear, light_condition::LightCondition=umbra)
     return FreespaceChannel(distance_m, elevation_angle_rad, min_altitude_m, conditions, light_condition)    
 end
-function FreespaceChannel(distance_m::Num64, elevation_angle_rad::Num64; min_altitude_m::Num64=0, conditions::Conditions=clear, light_condition::LightCondition=umbra)
-    return FreespaceChannel(distance_m, elevation_angle_rad, min_altitude_m, conditions, light_condition)    
-end
 
 """
 Create a FreespaceChannel between a satellite and a ground station.
