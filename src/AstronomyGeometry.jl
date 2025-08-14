@@ -14,14 +14,14 @@ const semiminor_radius = 6356752.3
 
 const G = 6.6743e-11
 const earth_mass_kg = 5.9722e24
-const seconds_per_day = 60*60*24
+const seconds_per_day = 60 * 60 * 24
 
 const equatorial_circumference_km = semimajor_radius / 500 * π
-const sin_60 = √3/2
+const sin_60 = √3 / 2
 
-GS = Union{NTuple{2, Number}, NTuple{3, Number}, SVector{2, Number}, SVector{3, Number}}
-Num64 = Union{Float64, Int64}
-Point3D = Union{SVector{3, Float64}, SVector{3, Int64}, NTuple{3, Num64}}
+GS = Union{NTuple{2,Number},NTuple{3,Number},SVector{2,Number},SVector{3,Number}}
+Num64 = Union{Float64,Int64}
+Point3D = Union{SVector{3,Float64},SVector{3,Int64},NTuple{3,Num64}}
 
 """
 Compute the Euclidean norm of a 3D point.
@@ -33,7 +33,7 @@ Compute the Euclidean norm of a 3D point.
 - `Float64`: The Euclidean distance from the origin.
 """
 function norm(point::Point3D)
-    √sum(point.^2)
+    √sum(point .^ 2)
 end
 
 """
@@ -86,7 +86,7 @@ Convert ECEF coordinates given as a 3D point to geodetic coordinates.
 # Returns
 - Geodetic coordinates (geodetic latitude in radians, geodetic latitude in radians, height in meters).
 """
-function ecef_to_geodetic(point_ecef::Point3D; ellipsoid::Ellipsoid{T} = WGS84_ELLIPSOID) where T<:Number
+function ecef_to_geodetic(point_ecef::Point3D; ellipsoid::Ellipsoid{T}=WGS84_ELLIPSOID) where T<:Number
     return ecef_to_geodetic([point_ecef[1], point_ecef[2], point_ecef[3]], ellipsoid=ellipsoid)
 end
 
@@ -102,7 +102,7 @@ Convert ECI coordinates to ECEF coordinates.
 # Returns
 - ECEF position vector in meters.
 """
-function eci_to_ecef(sat_sv::OrbitStateVector; time::Union{Number, DateTime, Missing}=missing)
+function eci_to_ecef(sat_sv::OrbitStateVector; time::Union{Number,DateTime,Missing}=missing)
     if time === missing
         time = sat_sv.t
     end
@@ -124,7 +124,7 @@ Convert ECI satellite propagator to ECEF coordinates.
 # Returns
 - ECEF position vector.
 """
-function eci_to_ecef(sat::OrbitPropagatorSgp4; time::Union{Number, DateTime, Missing}=missing)
+function eci_to_ecef(sat::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing)
     return eci_to_ecef(Propagators.propagate!(sat, 0), time=time)
 end
 
@@ -140,8 +140,8 @@ Convert a 3D ECI point to ECEF coordinates.
 # Returns
 - ECEF position vector in meters.
 """
-function eci_to_ecef(point_eci::Point3D; time::Union{Number, DateTime})
-    return eci_to_ecef(OrbitStateVector(0, [point_eci[1], point_eci[2], point_eci[3]], [0,0,0]), time=time)
+function eci_to_ecef(point_eci::Point3D; time::Union{Number,DateTime})
+    return eci_to_ecef(OrbitStateVector(0, [point_eci[1], point_eci[2], point_eci[3]], [0, 0, 0]), time=time)
 end
 
 """
@@ -158,7 +158,7 @@ Convert ECI coordinates (x, y, z) to ECEF coordinates.
 # Returns
 - ECEF position vector in meters.
 """
-function eci_to_ecef(x::Num64, y::Num64, z::Num64; time::Union{Number, DateTime})
+function eci_to_ecef(x::Num64, y::Num64, z::Num64; time::Union{Number,DateTime})
     return eci_to_ecef((x, y, z), time=time)
 end
 
@@ -174,7 +174,7 @@ Convert ECI satellite state vector to geodetic coordinates.
 # Returns
 - Geodetic coordinates (geodetic latitude in radians, geodetic lon in radians, height in meters).
 """
-function eci_to_geodetic(sat_sv::OrbitStateVector; time::Union{Number, DateTime, Missing}=missing)
+function eci_to_geodetic(sat_sv::OrbitStateVector; time::Union{Number,DateTime,Missing}=missing)
     if time === missing
         time = sat_sv.t
     end
@@ -193,7 +193,7 @@ Convert satellite propagator to geodetic coordinates.
 # Returns
 - Geodetic coordinates (geodetic latitude in radians, geodetic lon in radians, height in meters).
 """
-function eci_to_geodetic(sat::OrbitPropagatorSgp4; time::Union{Number, DateTime, Missing}=missing)
+function eci_to_geodetic(sat::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing)
     return eci_to_geodetic(Propagators.propagate!(sat, 0, OrbitStateVector), time=time)
 end
 
@@ -209,8 +209,8 @@ Convert a 3D ECI point to geodetic coordinates.
 # Returns
 - Geodetic coordinates (geodetic latitude in radians, geodetic lon in radians, height in meters).
 """
-function eci_to_geodetic(point_eci::Point3D; time::Union{Number, DateTime})
-    return eci_to_geodetic(OrbitStateVector(0, [point_eci[1], point_eci[2], point_eci[3]], [0,0,0]), time=time)
+function eci_to_geodetic(point_eci::Point3D; time::Union{Number,DateTime})
+    return eci_to_geodetic(OrbitStateVector(0, [point_eci[1], point_eci[2], point_eci[3]], [0, 0, 0]), time=time)
 end
 
 """
@@ -227,7 +227,7 @@ Convert ECI coordinates (x, y, z) to geodetic coordinates.
 # Returns
 - Geodetic coordinates (latitude in radians, geodetic lon in radians, height in meters).
 """
-function eci_to_geodetic(x::Num64, y::Num64, z::Num64; time::Union{Number, DateTime})
+function eci_to_geodetic(x::Num64, y::Num64, z::Num64; time::Union{Number,DateTime})
     return eci_to_geodetic((x, y, z), time=time)
 end
 
@@ -253,26 +253,28 @@ function ellipsoid_line_intersection(major::Num64, minor::Num64, point1::Point3D
     # coefficients for quadratic equation describing the intersection
     # of the line between the ground station and the satellite and
     # the atmosphere ellipsoid
-    c = (x1/major)^2 + (y1/major)^2 + (z1/minor)^2 - 1
-    b = 2*x1*(x2-x1)/major^2
-    b += 2*y1*(y2-y1)/major^2
-    b += 2*z1*(z2-z1)/minor^2
-    a = ((x2-x1)/major)^2 + ((y2-y1)/major)^2 + ((z2-z1)/minor)^2
+    c = (x1 / major)^2 + (y1 / major)^2 + (z1 / minor)^2 - 1
+    b = 2 * x1 * (x2 - x1) / major^2
+    b += 2 * y1 * (y2 - y1) / major^2
+    b += 2 * z1 * (z2 - z1) / minor^2
+    a = ((x2 - x1) / major)^2 + ((y2 - y1) / major)^2 + ((z2 - z1) / minor)^2
 
     # solving the quadratic equation gives the intersection parameters
     # for the line between the ground station and the satellite
 
     # no real solutions case (no intersection)
-    if b^2-4*a*c < 0
+    if b^2 - 4 * a * c < 0
         return []
     end
-    
+
     out = []
 
     # two solutions (intersects twice)
-    if b^2-4*a*c > 0
-        t2 = (-1*b - sqrt(b^2-4*a*c))/2/a
-        out_x2 = x1 + t2*(x2 - x1); out_y2 = y1 + t2*(y2 - y1); out_z2 = z1 + t2*(z2 - z1)
+    if b^2 - 4 * a * c > 0
+        t2 = (-1 * b - sqrt(b^2 - 4 * a * c)) / 2 / a
+        out_x2 = x1 + t2 * (x2 - x1)
+        out_y2 = y1 + t2 * (y2 - y1)
+        out_z2 = z1 + t2 * (z2 - z1)
         out2 = (out_x2, out_y2, out_z2)
         if !only_between || (norm(point1 .- out2) + norm(out2 .- point2) ≈ norm(point1 .- point2) && !(norm(point1 .- out2) ≈ 0) && !(norm(point2 .- out2) ≈ 0))
             push!(out, out2)
@@ -280,8 +282,10 @@ function ellipsoid_line_intersection(major::Num64, minor::Num64, point1::Point3D
     end
 
     # one or two solutions
-    t1 = (-1*b + sqrt(b^2-4*a*c))/2/a
-    out_x1 = x1 + t1*(x2 - x1); out_y1 = y1 + t1*(y2 - y1); out_z1 = z1 + t1*(z2 - z1)
+    t1 = (-1 * b + sqrt(b^2 - 4 * a * c)) / 2 / a
+    out_x1 = x1 + t1 * (x2 - x1)
+    out_y1 = y1 + t1 * (y2 - y1)
+    out_z1 = z1 + t1 * (z2 - z1)
     out1 = (out_x1, out_y1, out_z1)
     if !only_between || (norm(point1 .- out1) + norm(out1 .- point2) ≈ norm(point1 .- point2) && !(norm(point1 .- out1) ≈ 0) && !(norm(point2 .- out1) ≈ 0))
         push!(out, out1)
@@ -307,10 +311,11 @@ function gs_gs_distance(gs1::GS, gs2::GS)
     end
     #height1 = 0 ? length(gs1) < 3 : gs1[3]
     #height2 = 0 ? length(gs2) < 3 : gs2[3]
-    lat1, lon1 = gs1[1:2]; lat2, lon2 = gs2[1:2]
-    hav = 1/2 - cos(lat2 - lat1)/2 + cos(lat1)*cos(lat2)*(1/2 - cos(lon2 - lon1)/2)
-    theta = acos(1-hav*2)
-    return theta * (semimajor_radius + semiminor_radius)/2
+    lat1, lon1 = gs1[1:2]
+    lat2, lon2 = gs2[1:2]
+    hav = 1 / 2 - cos(lat2 - lat1) / 2 + cos(lat1) * cos(lat2) * (1 / 2 - cos(lon2 - lon1) / 2)
+    theta = acos(1 - hav * 2)
+    return theta * (semimajor_radius + semiminor_radius) / 2
 end
 
 """
@@ -356,7 +361,7 @@ Compute the distance between two satellites at a given time.
 # Returns
 - Distance in meters or `nothing` if obstructed.
 """
-function sat_sat_distance(sat_prop1::OrbitPropagatorSgp4, sat_prop2::OrbitPropagatorSgp4; time::Union{Number, DateTime, Missing}=missing)
+function sat_sat_distance(sat_prop1::OrbitPropagatorSgp4, sat_prop2::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing)
     if time === missing
         time = max(sat_prop1.sgp4d.epoch, sat_prop2.sgp4d.epoch)
     end
@@ -366,7 +371,7 @@ function sat_sat_distance(sat_prop1::OrbitPropagatorSgp4, sat_prop2::OrbitPropag
     if length(visibility_check) > 0
         return nothing
     end
-    return √((pos1[1]-pos2[1])^2 + (pos1[2]-pos2[2])^2 + (pos1[3]-pos2[3])^2)
+    return √((pos1[1] - pos2[1])^2 + (pos1[2] - pos2[2])^2 + (pos1[3] - pos2[3])^2)
 end
 
 """
@@ -382,14 +387,14 @@ Compute the distance between two satellites given their TLEs.
 # Returns
 - Distance in meters or `nothing` if obstructed.
 """
-function sat_sat_distance(sat_tle1::TLE, sat_tle2::TLE; time::Union{Number, DateTime, Missing}=missing)
-    return sat_sat_distance(Propagators.init(Val(:SGP4), sat_tle1), Propagators.init(Val(:SGP4), sat_tle2), time=time)    
+function sat_sat_distance(sat_tle1::TLE, sat_tle2::TLE; time::Union{Number,DateTime,Missing}=missing)
+    return sat_sat_distance(Propagators.init(Val(:SGP4), sat_tle1), Propagators.init(Val(:SGP4), sat_tle2), time=time)
 end
 
 @enum LightCondition begin
-    sunlight=true
+    sunlight = true
     penumbra
-    umbra=false
+    umbra = false
 end
 
 """
@@ -405,16 +410,16 @@ function sun_position(time::Float64)
     d = time - JD_J2000
     # https://astronomy.stackexchange.com/questions/28802/calculating-the-sun-s-position-in-eci
     # Calculate parameters
-    L = (280.4606184 + ((36000.77005361 / 36525) * d))*π/180 # mean longitude, in radians
-    g = (357.5277233 + ((35999.05034 / 36525) * d))*π/180 # mean anomaly, in radians
-    p = L + ((1.914666471 * sin(g)) + (0.918994643 * sin(2*g)))*π/180 # ecliptic longitude lambda, in radians
-    q = (23.43929 - ((46.8093/3600) * (d / 36525)))*π/180 # obliquity of ecliptic plane ϵ, in radians
+    L = (280.4606184 + ((36000.77005361 / 36525) * d)) * π / 180 # mean longitude, in radians
+    g = (357.5277233 + ((35999.05034 / 36525) * d)) * π / 180 # mean anomaly, in radians
+    p = L + ((1.914666471 * sin(g)) + (0.918994643 * sin(2 * g))) * π / 180 # ecliptic longitude lambda, in radians
+    q = (23.43929 - ((46.8093 / 3600) * (d / 36525))) * π / 180 # obliquity of ecliptic plane ϵ, in radians
 
     # Calculate unit directional vector in ECI coordinates
     direction_vector = [cos(p), cos(q) * sin(p), sin(q) * sin(p)]
 
     # Calculate distance to sun and scale the unit vector
-    a = 1.000140612 - (0.016708617 * cos(g)) - (0.000139589 * cos(2*g)) # distance from Earth's center to Sun's center in astronomical units (AU)
+    a = 1.000140612 - (0.016708617 * cos(g)) - (0.000139589 * cos(2 * g)) # distance from Earth's center to Sun's center in astronomical units (AU)
     m = a * 149597870700 # center-to-center distance from Earth to Sun in meters
     return m .* direction_vector # distance to sun in meters
 end
@@ -442,7 +447,7 @@ Determine the lighting condition at a given ECI point and time.
 # Returns
 - `LightCondition`: The lighting condition (sunlight, penumbra, umbra).
 """
-function light_at_point(point_eci::Point3D, time::Union{Number, DateTime})
+function light_at_point(point_eci::Point3D, time::Union{Number,DateTime})
     sun_pos = sun_position(time)
     light_symbol = lighting_condition([point_eci[1], point_eci[2], point_eci[3]], sun_pos)
     if light_symbol == :sunlight
@@ -454,7 +459,7 @@ function light_at_point(point_eci::Point3D, time::Union{Number, DateTime})
     end
 end
 
-@enum Conditions begin 
+@enum Conditions begin
     clear
     fog
     rain
@@ -465,6 +470,9 @@ struct FreespaceChannel
     distance_m::Number
     elevation_angle_rad::Number
     min_altitude_m::Number
+    transmitter_diameter_m::Number
+    receiver_diameter_m::Number
+    wavelength_nm::Number
     conditions::Conditions
     light_condition::LightCondition
 end
@@ -484,8 +492,8 @@ Create a FreespaceChannel with specified parameters.
 # Returns
 - `FreespaceChannel`: A new FreespaceChannel instance.
 """
-function FreespaceChannel(distance_m::Num64, elevation_angle_rad::Num64; min_altitude_m::Num64=0, conditions::Conditions=clear, light_condition::LightCondition=umbra)
-    return FreespaceChannel(distance_m, elevation_angle_rad, min_altitude_m, conditions, light_condition)    
+function FreespaceChannel(distance_m::Num64, elevation_angle_rad::Num64; min_altitude_m::Num64=0, transmitter_diameter_m::Num64=0.6, receiver_diameter_m::Num64=0.6, wavelength_nm::Num64=1550, conditions::Conditions=clear, light_condition::LightCondition=umbra)
+    return FreespaceChannel(distance_m, elevation_angle_rad, min_altitude_m, transmitter_diameter_m, receiver_diameter_m, wavelength_nm, conditions, light_condition)
 end
 
 """
@@ -503,7 +511,7 @@ Create a FreespaceChannel between a satellite and a ground station.
 # Returns
 - `FreespaceChannel` instance or `nothing` if ground station is not visible.
 """
-function FreespaceChannel(sat::OrbitPropagatorSgp4, gs::GS; time::Union{Number, DateTime, Missing}=missing, conditions::Conditions=clear, min_θ=deg2rad(20))
+function FreespaceChannel(sat::OrbitPropagatorSgp4, gs::GS; time::Union{Number,DateTime,Missing}=missing, transmitter_diameter_m::Num64=0.6, receiver_diameter_m::Num64=0.6, wavelength_nm::Num64=1550, conditions::Conditions=clear, min_θ=deg2rad(20))
     if time === missing
         time = sat.sgp4d.epoch
     end
@@ -521,9 +529,52 @@ function FreespaceChannel(sat::OrbitPropagatorSgp4, gs::GS; time::Union{Number, 
         gs_height = gs[3]
     end
     n, e, d = SatelliteToolboxTransformations.ecef_to_ned(sat_pos, gs[1], gs[2], gs_height, translate=true)
-    elevation_angle_rad = atan(-d/√(n^2+e^2))
+    elevation_angle_rad = atan(-d / √(n^2 + e^2))
     min_altitude_m = d < 0 ? gs_height : √(sat_pos[1]^2 + sat_pos[2]^2 + sat_pos[3]^2)
     light_condition = light_at_point(sat_sv.r, time)
-    distance_m = norm(geodetic_to_ecef(gs).-sat_pos)
-    return FreespaceChannel(distance_m, elevation_angle_rad, min_altitude_m, conditions, light_condition)
+    distance_m = norm(geodetic_to_ecef(gs) .- sat_pos)
+    return FreespaceChannel(distance_m, elevation_angle_rad, min_altitude_m, transmitter_diameter_m, receiver_diameter_m, wavelength_nm, conditions, light_condition)
+end
+
+"""
+Create a FreespaceChannel between two satellites.
+
+# Arguments
+- `sat1::OrbitPropagatorSgp4`: Satellite propagator (see [SatelliteToolboxPropagators.jl](https://github.com/JuliaSpace/SatelliteToolboxPropagators.jl)).
+- `sat2::OrbitPropagatorSgp4`: Satellite propagator
+
+# Keyword Arguments
+- `time::Union{Number, DateTime}`: Julian time of calculation (defaults to satellite epoch).
+- `conditions::Conditions`: Atmospheric conditions (default clear).
+
+# Returns
+- `FreespaceChannel` instance or `nothing` if satellites are not visible to each other.
+"""
+function FreespaceChannel(sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing, transmitter_diameter_m::Num64=60, receiver_diameter_m::Num64=60, wavelength_nm::Num64=1550, conditions::Conditions=clear)
+    if time === missing
+        time = sat.sgp4d.epoch
+    end
+    if typeof(time) == DateTime
+        time = datetime2julian(time)
+    end
+
+    sat1_sv = Propagators.propagate!(sat1, time - sat1.sgp4d.epoch, OrbitStateVector)
+    sat1_pos = eci_to_ecef(sat1_sv.r, time=time)
+
+    sat2_sv = Propagators.propagate!(sat2, time - sat2.sgp4d.epoch, OrbitStateVector)
+    sat2_pos = eci_to_ecef(sat2_sv.r, time=time)
+
+    visibility_check = ellipsoid_line_intersection(semimajor_radius, semiminor_radius, sat1_pos, sat2_pos, only_between=true)
+
+    if length(visibility_check) > 0
+        return nothing
+    end
+
+    min_altitude_m = min(√(sat1_pos[1]^2 + sat1_pos[2]^2 + sat1_pos[3]^2), √(sat2_pos[1]^2 + sat2_pos[2]^2 + sat2_pos[3]^2))
+    # TODO light at worst case of both points
+    light_condition = light_at_point(sat1_sv.r, time)
+
+    distance_m = norm(sat1_pos .- sat2_pos)
+
+    FreespaceChannel(distance_m, 0, min_altitude_m, transmitter_diameter_m, receiver_diameter_m, wavelength_nm, conditions, light_condition)
 end
