@@ -1,8 +1,7 @@
 using GeoDatasets
 using CSV
 using Random: Xoshiro, rand, seed!
-include(joinpath(@__DIR__, "AstronomyGeometry.jl"))
-#using .AstronomyGeometry
+using ..AstronomyGeometry: gs_gs_distance, GS, equatorial_circumference_km, sin_60
 
 """ City and population data from:
 @misc{Youderain_2021, title={World Cities Database}, url={https://simplemaps.com/data/world-cities}, journal={simplemaps}, author={Youderain, Chris}, year={2021}, month={Jun}}"""
@@ -23,7 +22,7 @@ Check if a given (lat, lon) is at least `min_distance` away from all ground stat
 function is_within_min_distance(lat::Float64, lon::Float64, gses::Vector, min_distance::Int)
     new_gs = (lat, lon)
     for gs ∈ gses
-        if gs_gs_distance(new_gs, gs) < min_distance
+        if gs_gs_distance(new_gs, gs) < min_distance * 1000
             return false
         end
     end
@@ -171,17 +170,23 @@ function generate_random_gses(n::Int; other_gses::Vector=[], timeout::Union{Inte
 end
 
 """
-Generate `n` approximately equispaced ground stations over the globe using a Fibonacci lattice.
+Generate `n` approximately equispaced ground stations over the globe using a Fibonacci lattice, an algorithm that only works correctly for odd n.
 
 # Arguments
 - `n::Int`: Number of ground stations to generate.
+- `fail_on_even::Bool=true`: If true, throws an error if `n` is odd. Otherwise, sets `n=n+1`.
 
 # Returns
 - `Vector`: A list of `(geodetic latitude in radians, geodetic longitude in radians)` tuples.
 """
-function generate_equispaced_gses(n::Int)
+function generate_equispaced_gses(n::Int; fail_on_even::Bool=true)
+    if n%2 == 0 && fail_on_even
+        throw("Fibonacci lattice algorithm only works for odd n, given n=$n")
+    elseif n%2 == 0
+        n += 1
+    end
     gses = []
-    N = n//2
+    N = n÷2
     ϕ = (1 + √5)/2
     for i ∈ -N:N
         sign = Int(i>=0)*2-1

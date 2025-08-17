@@ -2,8 +2,7 @@ using SatelliteToolboxTle
 using SatelliteAnalysis
 using Downloads
 using CSV
-include(joinpath(@__DIR__, "AstronomyGeometry.jl"))
-#using AstronomyGeometry: semimajor_radius, earth_mass_kg, seconds_per_day, G
+using ..AstronomyGeometry: semimajor_radius, earth_mass_kg, seconds_per_day, G
 
 const satcat_file_path = joinpath(@__DIR__, "../databases/satcat.csv")
 const starlink_TLE_file_path = joinpath(@__DIR__, "../databases/starlink.tle")
@@ -102,7 +101,7 @@ Generate synthetic TLEs for a regular constellation of satellites.
 - `sats_per_orbit::Int=18`: Satellites per orbital plane.
 - `altitude_km::Int=500`: Altitude of the orbits in kilometers.
 - `inclination_rad::Float64=π/2`: Inclination angle in radians.
-- `frozen_orbits::Bool=false`: Whether to use frozen orbit parameters.
+- `frozen_orbits::Bool=false`: Whether to use frozen orbit parameters. See https://juliaspace.github.io/SatelliteAnalysis.jl/stable/man/frozen_orbits/.
 
 # Returns
 - `Vector{TLE}`: Vector of synthetic TLEs.

@@ -1,3 +1,4 @@
+using SatelliteToolboxBase: OrbitStateVector
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
 using SatelliteToolboxTle: TLE
 using SatelliteToolboxTransformations
@@ -19,7 +20,7 @@ const seconds_per_day = 60 * 60 * 24
 const equatorial_circumference_km = semimajor_radius / 500 * π
 const sin_60 = √3 / 2
 
-GS = Union{NTuple{2,Number},NTuple{3,Number},SVector{2,Number},SVector{3,Number}}
+GS = Union{NTuple{2,T},NTuple{3,T},SVector{2,T},SVector{3,T}} where T<:Number
 Num64 = Union{Float64,Int64}
 Point3D = Union{SVector{3,Float64},SVector{3,Int64},NTuple{3,Num64}}
 
@@ -125,7 +126,7 @@ Convert ECI satellite propagator to ECEF coordinates.
 - ECEF position vector.
 """
 function eci_to_ecef(sat::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing)
-    return eci_to_ecef(Propagators.propagate!(sat, 0), time=time)
+    return eci_to_ecef(Propagators.propagate!(sat, 0, OrbitStateVector), time=time)
 end
 
 """
