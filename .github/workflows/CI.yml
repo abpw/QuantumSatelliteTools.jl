@@ -15,9 +15,6 @@ jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
-    env:
-      LD_LIBRARY_PATH: /usr/local/openssl-3.3.0/lib:$LD_LIBRARY_PATH
-      PKG_CONFIG_PATH: /usr/local/openssl-3.3.0/lib/pkgconfig:$PKG_CONFIG_PATH
     timeout-minutes: 60
     permissions: # needed to allow julia-actions/cache to proactively delete old caches that it has created
       actions: write
@@ -27,7 +24,6 @@ jobs:
       matrix:
         version:
           - '1.11'
-          - '1.6'
           - 'pre'
         os:
           - ubuntu-latest
@@ -44,19 +40,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-matplotlib
-      - name: Cache OpenSSL 3.3.0
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/openssl-3.3.0
-          key: openssl-3.3.0-${{ runner.os }}
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
   docs:
     name: Documentation
     runs-on: ubuntu-latest
-    env:
-      LD_LIBRARY_PATH: /usr/local/openssl-3.3.0/lib:$LD_LIBRARY_PATH
-      PKG_CONFIG_PATH: /usr/local/openssl-3.3.0/lib/pkgconfig:$PKG_CONFIG_PATH
     permissions:
       actions: write # needed to allow julia-actions/cache to proactively delete old caches that it has created
       contents: write
@@ -71,11 +59,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-matplotlib
-      - name: Cache OpenSSL 3.3.0
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/openssl-3.3.0
-          key: openssl-3.3.0-${{ runner.os }}
       - name: Configure doc environment
         shell: julia --project=docs --color=yes {0}
         run: |
