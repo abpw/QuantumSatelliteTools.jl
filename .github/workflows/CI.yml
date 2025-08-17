@@ -35,11 +35,12 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v4
       - name: Install matplotlib dependency
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-matplotlib
+          sudo apt-get install libssl-dev
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
   docs:
@@ -59,6 +60,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-matplotlib
+          sudo apt-get install libssl-dev
       - name: Configure doc environment
         shell: julia --project=docs --color=yes {0}
         run: |

@@ -5,6 +5,7 @@ using ..AstronomyGeometry: gs_gs_distance, GS, equatorial_circumference_km, sin_
 
 """ City and population data from:
 @misc{Youderain_2021, title={World Cities Database}, url={https://simplemaps.com/data/world-cities}, journal={simplemaps}, author={Youderain, Chris}, year={2021}, month={Jun}}"""
+
 const city_data_file_str = joinpath(@__DIR__, "../databases/worldcities.csv")
 
 """

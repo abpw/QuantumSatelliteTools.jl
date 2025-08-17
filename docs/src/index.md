@@ -40,5 +40,6 @@ using QuantumSatelliteTools
 ## API Documentation
 
 ```@autodocs
-Modules = [QuantumSatelliteTools]
+Modules = [QuantumSatelliteTools.AstronomyGeometry, QuantumSatelliteTools.GenerateTLEs, QuantumSatelliteTools.GenerateGroundStations]
+Order   = [:type, :function]
 ```
