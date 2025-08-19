@@ -466,6 +466,7 @@ end
     rain
     snow
 end
+# TODO doctring for struct
 
 struct FreespaceChannel
     distance_m::Number
@@ -486,6 +487,9 @@ Create a FreespaceChannel with specified parameters.
 - `elevation_angle_rad::Num64`: Elevation angle in radians.
 
 # Keyword Arguments
+- `transmitter_diameter_m::Number`: Diameter of the transmitting telescope in meters (default 0.6).
+- `receiver_diameter_m::Number`: Diameter of the receiving telescope in meters (default 0.6).
+- `wavelength_nm::Number`: Wavelength in nanometers (default 1550).
 - `min_altitude_m::Num64`: Minimum altitude in meters (default 0).
 - `conditions::Conditions`: Atmospheric conditions (default clear).
 - `light_condition::LightCondition`: Lighting condition (default umbra).
@@ -505,6 +509,9 @@ Create a FreespaceChannel between a satellite and a ground station.
 - `gs::GS`: Ground station coordinates (geodetic latitude in radians, geodetic lon in radians[, height in meters]).
 
 # Keyword Arguments
+- `transmitter_diameter_m::Number`: Diameter of the transmitting telescope in meters (default 0.6).
+- `receiver_diameter_m::Number`: Diameter of the receiving telescope in meters (default 0.6).
+- `wavelength_nm::Number`: Wavelength in nanometers (default 1550).
 - `time::Union{Number, DateTime}`: Julian time of calculation (defaults to satellite epoch).
 - `conditions::Conditions`: Atmospheric conditions (default clear).
 - `min_θ`: Minimum elevation angle in radians (default 20 degrees).
@@ -512,7 +519,7 @@ Create a FreespaceChannel between a satellite and a ground station.
 # Returns
 - `FreespaceChannel` instance or `nothing` if ground station is not visible.
 """
-function FreespaceChannel(sat::OrbitPropagatorSgp4, gs::GS; time::Union{Number,DateTime,Missing}=missing, transmitter_diameter_m::Num64=0.6, receiver_diameter_m::Num64=0.6, wavelength_nm::Num64=1550, conditions::Conditions=clear, min_θ=deg2rad(20))
+function FreespaceChannel(sat::OrbitPropagatorSgp4, gs::GS; transmitter_diameter_m::Num64=60, receiver_diameter_m::Num64=60, wavelength_nm::Num64=1550, time::Union{Number,DateTime,Missing}=missing, conditions::Conditions=clear, min_θ=deg2rad(20))
     if time === missing
         time = sat.sgp4d.epoch
     end
@@ -542,16 +549,19 @@ Create a FreespaceChannel between two satellites.
 
 # Arguments
 - `sat1::OrbitPropagatorSgp4`: Satellite propagator (see [SatelliteToolboxPropagators.jl](https://github.com/JuliaSpace/SatelliteToolboxPropagators.jl)).
-- `sat2::OrbitPropagatorSgp4`: Satellite propagator
+- `sat2::OrbitPropagatorSgp4`: Satellite propagator.
 
 # Keyword Arguments
+- `transmitter_diameter_m::Number`: Diameter of the transmitting telescope in meters (default 0.6).
+- `receiver_diameter_m::Number`: Diameter of the receiving telescope in meters (default 0.6).
+- `wavelength_nm::Number`: Wavelength in nanometers (default 1550).
 - `time::Union{Number, DateTime}`: Julian time of calculation (defaults to satellite epoch).
 - `conditions::Conditions`: Atmospheric conditions (default clear).
 
 # Returns
 - `FreespaceChannel` instance or `nothing` if satellites are not visible to each other.
 """
-function FreespaceChannel(sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing, transmitter_diameter_m::Num64=60, receiver_diameter_m::Num64=60, wavelength_nm::Num64=1550, conditions::Conditions=clear)
+function FreespaceChannel(sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4; transmitter_diameter_m::Num64=60, receiver_diameter_m::Num64=60, wavelength_nm::Num64=1550, time::Union{Number,DateTime,Missing}=missing, conditions::Conditions=clear)
     if time === missing
         time = sat.sgp4d.epoch
     end
@@ -578,4 +588,10 @@ function FreespaceChannel(sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4; 
     distance_m = norm(sat1_pos .- sat2_pos)
 
     FreespaceChannel(distance_m, 0, min_altitude_m, transmitter_diameter_m, receiver_diameter_m, wavelength_nm, conditions, light_condition)
+end
+
+function transmissivity(channel::FreespaceChannel)
+    # case 1: no atmosphere (intersatellite)
+    # case 2: downlink
+    # case 3: uplink
 end
