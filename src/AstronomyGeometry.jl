@@ -591,7 +591,6 @@ function FreespaceChannel(sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4; 
 end
 
 function transmissivity(channel::FreespaceChannel)
-    # case 1: no atmosphere (intersatellite)
-    # case 2: downlink
-    # case 3: uplink
+    # L_tot = L_geo + L_atm + L_pnt
+    geometric_loss()
 end
