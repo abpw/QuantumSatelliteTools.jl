@@ -21,7 +21,7 @@ Calculate the geometric loss for a channel.
 # Returns
 - The total geometric loss in decibels.
 """
-function geometric_loss(channel::FreespaceChannel)
+function geometric_loss_dB(channel::FreespaceChannel)
     20 * log10((channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) / channel.receiver_diameter_m)
 end
 
@@ -55,7 +55,7 @@ Calculate the atmospheric loss for a channel.
 # Returns
 - The total atmospheric loss in decibels.
 """
-function atmospheric_loss(channel::FreespaceChannel)
+function atmospheric_loss_dB(channel::FreespaceChannel)
     atmosphere_distance = atmosphere_distance(channel)
     # Transmittance loss
     if channel.wavelength_nm == 550
@@ -104,9 +104,9 @@ Calculate the pointing loss for a channel.
 # Returns
 - The total pointing loss in decibels.
 """
-function pointing_loss(channel::FreespaceChannel, pointing_jitter::Num64=5)
+function pointing_loss_dB(channel::FreespaceChannel, pointing_jitter::Num64=5)
     # L_PNT = exp(-8Θ²ⱼ/w²₀)
-    exp(-8 * (pointing_jitter * 10^-6)^2 / waist_radius(channel)^2)
+    exp(-8 * (pointing_jitter * 1e-6)^2 / waist_radius(channel)^2)
 
 end
 

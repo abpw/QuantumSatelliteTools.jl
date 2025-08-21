@@ -30,9 +30,9 @@ export refresh_satcat, update_starlink_tles, save_TLEs, get_active_satellite_TLE
 include("GenerateTLEs.jl")
 end
 
-module VisualizeMap
-export plot_gses
-include("VisualizeMap.jl")
-end
+# module VisualizeMap
+# export plot_gses
+# include("VisualizeMap.jl")
+# end
 
 end
