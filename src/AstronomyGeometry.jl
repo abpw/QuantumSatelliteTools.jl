@@ -460,6 +460,19 @@ function light_at_point(point_eci::Point3D, time::Union{Number,DateTime})
     end
 end
 
+"""
+Convert a loss value from decibels to probability.
+
+# Arguments
+- `loss_dB::Num64`: The loss in decibels.
+
+# Returns
+- The loss as a probability (0 - 1).
+"""
+function decibels_to_probability(loss_dB::Num64)
+    10^(loss_dB / 20)
+end
+
 @enum Conditions begin
     clear
     fog
@@ -590,7 +603,42 @@ function FreespaceChannel(sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4; 
     FreespaceChannel(distance_m, 0, min_altitude_m, transmitter_diameter_m, receiver_diameter_m, wavelength_nm, conditions, light_condition)
 end
 
+"""
+Calculate transmissivity in a freespace channel.
+
+# Arguments
+- `channel::FreespaceChannel`: A freespace channel.
+
+# Returns
+- The probability of a successful transmission through the channel.
+"""
 function transmissivity(channel::FreespaceChannel)
     # L_tot = L_geo + L_atm + L_pnt
-    geometric_loss()
+    1 - 10^((geometric_loss(channel) + atmospheric_loss(channel) + pointing_loss(channel)) / 20)
+end
+
+struct Path <: Vector{Union{OrbitPropagatorSgp4,Tuple{Number}}}
+end
+
+function path_transmissivity(::Val{:REF}, path::Path)
+    transmission_probability = 1
+    # Uplink losses
+    transmission_probability *= transmissivity(FreespaceChannel(path[2], path[1]))
+    # Inter-satellite and downlink losses
+    for i in 3:length(path)-1
+        transmission_probability *= transmissivity(FreespaceChannel(path[i], path[i+1]))
+    end
+    # Reflector losses
+    transmission_probability *= (1 - decibel_to_probability(reflector_loss()))^(length(path) - 2)
+end
+
+function path_transmissivity(::Val{:DD}, path::Path)
+    transmission_probability = 1
+    # Dual-downlink channel losses
+    for i in 1:2:length(path.path)
+        transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i]))
+        transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i+2]))
+    end
+    # Entanglement swapping losses
+    transmission_probability *= swapping_loss()^((length(path) - 3) / 2)
 end

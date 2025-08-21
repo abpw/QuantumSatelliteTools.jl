@@ -9,9 +9,8 @@ Calculate the beam waist radius for a channel.
 """
 function waist_radius(channel::FreespaceChannel)
     # w₀ =  122λ/Dₜ
-    1.22 × (channel.wavelength_nm × 1e-9) ÷ channel.transmitter_diameter_m
+    1.22 * (channel.wavelength_nm * 1e-9) / channel.transmitter_diameter_m
 end
-
 
 """
 Calculate the geometric loss for a channel.
@@ -23,9 +22,8 @@ Calculate the geometric loss for a channel.
 - The total geometric loss in decibels.
 """
 function geometric_loss(channel::FreespaceChannel)
-    20 × log10((channel.transmitter_diameter_m + channel.distance_m × waist_radius(channel)) ÷ channel.receiver_diameter_m)
+    20 * log10((channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) / channel.receiver_diameter_m)
 end
-
 
 """
 Calculate the distance over which the channel passes through the atmosphere.
@@ -41,13 +39,12 @@ function atmosphere_distance(channel::FreespaceChannel, atmosphere_height_m::Num
     if elevation_angle_rad == 0
         atmospheric_distance = 0
     else
-        relative_elevation = channel.distance_m × sin(channel.elevation_angle_rad)
+        relative_elevation = channel.distance_m * sin(channel.elevation_angle_rad)
         atmospheric_elevation = min(relative_elevation, atmosphere_height_m - channel.min_altitude_m)
         atmospheric_distance = atmospheric_elevation / sin(channel.elevation_angle_rad)
     end
     atmospheric_distance
 end
-
 
 """
 Calculate the atmospheric loss for a channel.
@@ -73,7 +70,7 @@ function atmospheric_loss(channel::FreespaceChannel)
         throw("Molecular absorption is not defined for other wavelengths")
     end
 
-    transmittance_loss = molecular_absorption × (atmosphere_distance / 1000)
+    transmittance_loss = molecular_absorption * (atmosphere_distance / 1000)
 
     # Weather loss - to be finished later
     # if channel.conditions == fog
@@ -82,7 +79,7 @@ function atmospheric_loss(channel::FreespaceChannel)
     #     elseif atmosphere_distance > 6 && atmosphere_distance < 50
     #         p = 1.3
     #     elseif atmosphere_distance < 6
-    #         p = 0.585 × atmosphere_distance^(1 / 3)
+    #         p = 0.585 * atmosphere_distance^(1 / 3)
     #     else
     #         throw("Fog loss is not defined for distances 6 km or 50 km")
     #     end
@@ -95,9 +92,7 @@ function atmospheric_loss(channel::FreespaceChannel)
     # end
 
     # transmittance_loss + weather_loss
-    transmittance_loss
 end
-
 
 """
 Calculate the pointing loss for a channel.
@@ -111,20 +106,30 @@ Calculate the pointing loss for a channel.
 """
 function pointing_loss(channel::FreespaceChannel, pointing_jitter::Num64=5)
     # L_PNT = exp(-8Θ²ⱼ/w²₀)
-    exp(-8 × (pointing_jitter × 10^-6)^2 / waist_radius(channel)^2)
+    exp(-8 * (pointing_jitter * 10^-6)^2 / waist_radius(channel)^2)
 
 end
-
 
 """
 Calculate the reflector loss for a satellite.
 
-# Arguments
-
-# Keyword Arguments
-
-# Return
+# Returns
+- The reflector loss for one satellite in decibels.
 """
-function reflector_loss(channel::FreespaceChannel)
+function reflector_loss()
+    5.854678746311231
+end
 
+"""
+Calculate the swapping loss for a ground station.
+
+# Arguments
+- `memory_read_write_loss::Num64`: Read/write loss of the quantum memory as a probability.
+
+# Returns
+- The swapping loss for one ground station as a probability.
+"""
+function swapping_loss(memory_read_write_loss::Num64=0.8)
+    # 0.5 is Bell state measurement
+    0.5 * memory_read_write_loss
 end
