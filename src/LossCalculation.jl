@@ -1,4 +1,17 @@
 """
+Convert decibel loss to probability (linear) loss.
+
+# Arguments
+- `loss_db::Number`: Loss in decibels.
+
+# Returns
+- Loss as a probability (0 to 1).
+"""
+function decibel_to_probability(loss_db::Number)
+    1 - 10^(-loss_db / 10)
+end
+
+"""
 Calculate the beam waist radius for a channel.
 
 # Arguments
@@ -36,14 +49,21 @@ Calculate the distance over which the channel passes through the atmosphere.
 - The distance that the channel passes through the atmosphere in meters.
 """
 function atmosphere_distance(channel::FreespaceChannel, atmosphere_height_m::Num64=18e3)
-    if elevation_angle_rad == 0
-        atmospheric_distance = 0
-    else
-        relative_elevation = channel.distance_m * sin(channel.elevation_angle_rad)
-        atmospheric_elevation = min(relative_elevation, atmosphere_height_m - channel.min_altitude_m)
-        atmospheric_distance = atmospheric_elevation / sin(channel.elevation_angle_rad)
+    if channel.elevation_angle_rad == 0
+        # Horizontal link - no meaningful atmosphere distance calculation
+        return 0.0
     end
-    atmospheric_distance
+    
+    # If satellite is already below atmosphere boundary, signal travels through entire atmosphere
+    if channel.min_altitude_m <= atmosphere_height_m
+        # Calculate distance from satellite altitude to ground through atmosphere
+        altitude_through_atmosphere = atmosphere_height_m
+        return altitude_through_atmosphere / sin(channel.elevation_angle_rad)
+    else
+        # Satellite is above atmosphere - calculate distance through atmosphere only
+        # The signal enters atmosphere at atmosphere_height_m and travels to ground
+        return atmosphere_height_m / sin(channel.elevation_angle_rad)
+    end
 end
 
 """
@@ -56,7 +76,7 @@ Calculate the atmospheric loss for a channel.
 - The total atmospheric loss in decibels.
 """
 function atmospheric_loss(channel::FreespaceChannel)
-    atmosphere_distance = atmosphere_distance(channel)
+    atm_distance = atmosphere_distance(channel)
     # Transmittance loss
     if channel.wavelength_nm == 550
         molecular_absorption = 0.13
@@ -67,10 +87,10 @@ function atmospheric_loss(channel::FreespaceChannel)
     elseif channel.wavelength_nm == 1550
         molecular_absorption = 0.01
     else
-        throw("Molecular absorption is not defined for other wavelengths")
+        throw(ArgumentError("Molecular absorption is not defined for wavelength $(channel.wavelength_nm)nm. Supported wavelengths: 550, 690, 850, 1550 nm"))
     end
 
-    transmittance_loss = molecular_absorption * (atmosphere_distance / 1000)
+    transmittance_loss = molecular_absorption * (atm_distance / 1000)
 
     # Weather loss - to be finished later
     # if channel.conditions == fog
@@ -91,6 +111,8 @@ function atmospheric_loss(channel::FreespaceChannel)
     #     weather_loss = 0
     # end
 
+    transmittance_loss
+    # TODO: Add weather loss when implemented
     # transmittance_loss + weather_loss
 end
 

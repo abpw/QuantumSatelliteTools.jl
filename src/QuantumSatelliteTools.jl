@@ -16,6 +16,7 @@ export LightCondition, sunlight, penumbra, umbra
 export sun_position, light_at_point
 export Conditions, clear, fog, rain, snow
 export FreespaceChannel
+export decibel_to_probability, waist_radius, geometric_loss, atmosphere_distance, atmospheric_loss, pointing_loss, reflector_loss, swapping_loss, transmissivity, path_transmissivity, Path
 include("AstronomyGeometry.jl")
 end
 

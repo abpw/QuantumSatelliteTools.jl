@@ -613,32 +613,48 @@ Calculate transmissivity in a freespace channel.
 - The probability of a successful transmission through the channel.
 """
 function transmissivity(channel::FreespaceChannel)
-    # L_tot = L_geo + L_atm + L_pnt
-    1 - 10^((geometric_loss(channel) + atmospheric_loss(channel) + pointing_loss(channel)) / 20)
+    # Calculate losses in dB
+    geometric_loss_db = geometric_loss(channel)
+    atmospheric_loss_db = atmospheric_loss(channel)
+    
+    # pointing_loss returns a probability, not dB
+    pointing_probability = pointing_loss(channel)
+    
+    # Total dB loss (without pointing)
+    total_loss_db = geometric_loss_db + atmospheric_loss_db
+    
+    # Transmissivity = 10^(-loss_dB/10) * pointing_probability
+    return 10^(-total_loss_db / 10) * pointing_probability
 end
 
-struct Path <: Vector{Union{OrbitPropagatorSgp4,Tuple{Number}}}
+struct Path
+    path::Vector{Union{OrbitPropagatorSgp4,Tuple{Number}}}
 end
+
+# Constructor convenience
+Path(elements...) = Path([elements...])
 
 function path_transmissivity(::Val{:REF}, path::Path)
     transmission_probability = 1
     # Uplink losses
-    transmission_probability *= transmissivity(FreespaceChannel(path[2], path[1]))
+    transmission_probability *= transmissivity(FreespaceChannel(path.path[2], path.path[1]))
     # Inter-satellite and downlink losses
-    for i in 3:length(path)-1
-        transmission_probability *= transmissivity(FreespaceChannel(path[i], path[i+1]))
+    for i in 3:length(path.path)-1
+        transmission_probability *= transmissivity(FreespaceChannel(path.path[i], path.path[i+1]))
     end
     # Reflector losses
-    transmission_probability *= (1 - decibel_to_probability(reflector_loss()))^(length(path) - 2)
+    transmission_probability *= (1 - decibel_to_probability(reflector_loss()))^(length(path.path) - 2)
 end
 
 function path_transmissivity(::Val{:DD}, path::Path)
     transmission_probability = 1
     # Dual-downlink channel losses
     for i in 1:2:length(path.path)
-        transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i]))
-        transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i+2]))
+        transmission_probability *= transmissivity(FreespaceChannel(path.path[i+1], path.path[i]))
+        transmission_probability *= transmissivity(FreespaceChannel(path.path[i+1], path.path[i+2]))
     end
     # Entanglement swapping losses
-    transmission_probability *= swapping_loss()^((length(path) - 3) / 2)
+    transmission_probability *= swapping_loss()^((length(path.path) - 3) / 2)
 end
+
+include("LossCalculation.jl")

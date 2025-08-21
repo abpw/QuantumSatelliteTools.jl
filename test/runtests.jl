@@ -310,4 +310,184 @@ using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
             @test all(-π .<= last.(gses) .<= π)
         end
     end
+
+    @testset "LossCalculation.jl" begin
+        using QuantumSatelliteTools.AstronomyGeometry: decibel_to_probability, waist_radius, geometric_loss, atmosphere_distance, atmospheric_loss, pointing_loss, reflector_loss, swapping_loss, transmissivity, FreespaceChannel, clear, sunlight
+
+        @testset "decibel_to_probability" begin
+            # Test basic conversion
+            @test decibel_to_probability(0) ≈ 0.0 atol=1e-10
+            @test decibel_to_probability(10) ≈ 0.9 atol=1e-10
+            @test decibel_to_probability(20) ≈ 0.99 atol=1e-10
+            @test decibel_to_probability(30) ≈ 0.999 atol=1e-10
+            # Negative values should give negative probabilities (unphysical but mathematically correct)
+            @test decibel_to_probability(-10) < 0
+        end
+
+        @testset "waist_radius" begin
+            # Create test channels with different parameters
+            channel_500nm = FreespaceChannel(1000.0, 0.0, 0.0, 0.1, 0.05, 500, clear, sunlight)
+            channel_1550nm = FreespaceChannel(1000.0, 0.0, 0.0, 0.1, 0.05, 1550, clear, sunlight)
+            
+            # Test waist radius calculation: w₀ = 1.22λ/D
+            expected_500nm = 1.22 * (500e-9) / 0.1
+            expected_1550nm = 1.22 * (1550e-9) / 0.1
+            
+            @test waist_radius(channel_500nm) ≈ expected_500nm rtol=1e-12
+            @test waist_radius(channel_1550nm) ≈ expected_1550nm rtol=1e-12
+            
+            # Longer wavelength should give larger waist radius
+            @test waist_radius(channel_1550nm) > waist_radius(channel_500nm)
+        end
+
+        @testset "geometric_loss" begin
+            # Test geometric loss calculation
+            channel = FreespaceChannel(1000.0, 0.0, 0.0, 0.1, 0.05, 1550, clear, sunlight)
+            
+            # Geometric loss = 20*log10((D_t + d*w₀)/D_r)
+            w0 = waist_radius(channel)
+            expected_loss = 20 * log10((0.1 + 1000.0 * w0) / 0.05)
+            
+            @test geometric_loss(channel) ≈ expected_loss rtol=1e-12
+            @test geometric_loss(channel) > 0  # Should be positive (loss)
+        end
+
+        @testset "atmosphere_distance" begin
+            # Test with zero elevation angle
+            channel_zero_elev = FreespaceChannel(1000.0, 0.0, 0.0, 0.1, 0.05, 1550, clear, sunlight)
+            @test atmosphere_distance(channel_zero_elev) == 0
+            
+            # Test with 45 degree elevation
+            channel_45deg = FreespaceChannel(1000.0, π/4, 100000.0, 0.1, 0.05, 1550, clear, sunlight)
+            atm_dist = atmosphere_distance(channel_45deg)
+            @test atm_dist > 0
+            @test atm_dist > 18000  # Should be at least atmosphere height / sin(45°) ≈ 25,456m
+            
+            # Test with 90 degree elevation (straight up)
+            channel_90deg = FreespaceChannel(1000.0, π/2, 100000.0, 0.1, 0.05, 1550, clear, sunlight)
+            atm_dist_90 = atmosphere_distance(channel_90deg)
+            @test atm_dist_90 > 0
+            
+            # Test with custom atmosphere height
+            custom_atm_height = 10e3
+            atm_dist_custom = atmosphere_distance(channel_45deg, custom_atm_height)
+            @test atm_dist_custom >= 0
+        end
+
+        @testset "atmospheric_loss" begin
+            # Test supported wavelengths
+            wavelengths = [550, 690, 850, 1550]
+            expected_absorptions = [0.13, 0.01, 0.41, 0.01]
+            
+            for (wl, expected_absorption) in zip(wavelengths, expected_absorptions)
+                channel = FreespaceChannel(10000.0, π/4, 200000.0, 0.1, 0.05, wl, clear, sunlight)
+                loss = atmospheric_loss(channel)
+                @test loss >= 0  # Loss should be non-negative
+                
+                # Calculate expected loss based on transmittance
+                atm_dist = atmosphere_distance(channel)
+                expected_loss = expected_absorption * (atm_dist / 1000)
+                @test loss ≈ expected_loss rtol=1e-12
+            end
+            
+            # Test unsupported wavelength throws error
+            channel_bad_wl = FreespaceChannel(1000.0, π/4, 100000.0, 0.1, 0.05, 633, clear, sunlight)
+            @test_throws Exception atmospheric_loss(channel_bad_wl)
+        end
+
+        @testset "pointing_loss" begin
+            channel = FreespaceChannel(1000.0, π/4, 100000.0, 0.1, 0.05, 1550, clear, sunlight)
+            
+            # Test with default pointing jitter (5 μrad)
+            loss_default = pointing_loss(channel)
+            @test 0 < loss_default <= 1  # Should be a probability
+            
+            # Test with custom pointing jitter
+            loss_10 = pointing_loss(channel, 10)
+            loss_1 = pointing_loss(channel, 1)
+            
+            # Higher jitter should give lower transmission (higher loss)
+            @test loss_1 > loss_10
+            
+            # Test formula: L_PNT = exp(-8Θ²ⱼ/w²₀)
+            w0 = waist_radius(channel)
+            jitter = 5e-6  # 5 microradians
+            expected = exp(-8 * jitter^2 / w0^2)
+            @test pointing_loss(channel, 5) ≈ expected rtol=1e-12
+        end
+
+        @testset "reflector_loss" begin
+            # Test that reflector loss is a constant
+            @test reflector_loss() == 5.854678746311231
+            @test typeof(reflector_loss()) <: Number
+        end
+
+        @testset "swapping_loss" begin
+            # Test with default memory loss (0.8)
+            loss_default = swapping_loss()
+            @test loss_default == 0.5 * 0.8
+            @test loss_default == 0.4
+            
+            # Test with custom memory loss
+            loss_09 = swapping_loss(0.9)
+            @test loss_09 == 0.5 * 0.9
+            @test loss_09 == 0.45
+            
+            # Test edge cases
+            @test swapping_loss(0.0) == 0.0
+            @test swapping_loss(1.0) == 0.5
+        end
+
+        @testset "transmissivity" begin
+            # Create a test channel
+            channel = FreespaceChannel(5000.0, π/6, 400000.0, 0.1, 0.05, 1550, clear, sunlight)
+            
+            # Test that transmissivity is between 0 and 1
+            trans = transmissivity(channel)
+            @test 0 <= trans <= 1
+            
+            # Test that transmissivity formula matches expectation
+            # transmissivity = 10^(-L_dB/10) * pointing_probability
+            geo_loss = geometric_loss(channel)
+            atm_loss = atmospheric_loss(channel)
+            pointing_prob = pointing_loss(channel)
+            total_loss_db = geo_loss + atm_loss
+            
+            expected_trans = 10^(-total_loss_db / 10) * pointing_prob
+            @test trans ≈ expected_trans rtol=1e-10
+            
+            # Test with a different channel configuration
+            alt_channel = FreespaceChannel(100.0, π/2, 500000.0, 0.2, 0.1, 1550, clear, sunlight)
+            trans_alt = transmissivity(alt_channel)
+            @test 0 <= trans_alt <= 1  # Should be a valid transmissivity
+        end
+
+        @testset "integration tests" begin
+            # Test that all functions work together in a realistic scenario
+            
+            # Typical satellite-to-ground link parameters
+            distance_m = 1000e3  # 1000 km
+            elevation_rad = deg2rad(30)  # 30 degree elevation
+            min_altitude_m = 400e3  # 400 km altitude
+            tx_diameter = 0.3  # 30 cm transmitter
+            rx_diameter = 1.0   # 1 m receiver
+            wavelength = 1550   # 1550 nm
+            
+            channel = FreespaceChannel(distance_m, elevation_rad, min_altitude_m, 
+                                     tx_diameter, rx_diameter, wavelength, clear, sunlight)
+            
+            # All loss functions should return reasonable values
+            @test 0 < waist_radius(channel) < 1e-3  # Should be microradians
+            @test geometric_loss(channel) > 0
+            @test atmosphere_distance(channel) > 0
+            @test atmospheric_loss(channel) >= 0
+            @test 0 < pointing_loss(channel) <= 1
+            @test reflector_loss() > 0
+            @test 0 < swapping_loss() < 1
+            
+            # Overall transmissivity should be reasonable for this link
+            trans = transmissivity(channel)
+            @test 1e-6 < trans < 0.1  # Typical range for satellite links
+        end
+    end
 end
