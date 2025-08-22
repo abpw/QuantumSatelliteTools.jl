@@ -34,6 +34,12 @@ GSES = [
     (-36.8485, 174.7633)   # Auckland, New Zealand
 ]
 
+@enum Entities begin
+    sat
+    gs
+    aux_gs
+end
+
 """
 Conduct a simulation of a quantum satellite network.
 
@@ -46,12 +52,25 @@ Conduct a simulation of a quantum satellite network.
 - An aggregate representation of the performance of the system.
 """
 function simulation_driver(duration_s::Int64, interval_s::Int64,
-        epoch::Float64, gses::Vector{Tuple{Float64}}=GSES)
+        epoch::Float64; gses::Vector{Tuple{Float64}}=GSES,
+        aux_gses::Union{Vector{Tuple{Float64}}, Missing}=missing)
     # Downloading Starlink TLEs 8.21.2025
     tles = read_tles_from_file(joinpath(@__DIR__, "../databases/starlink.tle"))
     propagators = [Propagators.init(Val(:SGP4), tle) for tle in tles]
+    aux_gses = ismissing(aux_gses) ? [] : aux_gses
+
+    # Map entity to an integer index
     node_map = Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64}(
-        node => index for (index, node) in enumerate(vcat(propagators, gses)))
+        node => index for (index, node) in enumerate(vcat(propagators, gses, aux_gses)))
+
+    # Map integer index of entity to entity type
+    types = Dict{Int64, Entities}(
+        node_map[propagator] => sat for propagator in propagators)
+    merge!(types, Dict{Int64, Entities}(
+        node_map[gs] => gs for gs in gses))
+    merge!(types, Dict{Int64, Entities}(
+        node_map[aux_gs] => aux_gs for aux_gs in aux_gses))
+
     for experiment in [Val(:REF), Val(:DD)]
         for time_elapsed in 0:interval_s:duration_s-1
             sources, destinations, weights =
