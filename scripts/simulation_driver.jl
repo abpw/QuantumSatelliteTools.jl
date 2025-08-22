@@ -2,8 +2,9 @@ using SatelliteToolboxTle
 using GenerateGroundStations
 using GenerateTLEs
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
-using AstronomyGeometry: FreespaceChannel, transmissivity
-using SimpleWeightedGraphs
+using AstronomyGeometry: FreespaceChannel, transmissivity, decibels_to_probability
+using SimpleWeightedGraphs, Graphs
+using LossCalculation: reflector_loss, swapping_loss
 
 GSES = [
     # North America
@@ -88,4 +89,37 @@ function simulation_driver(duration_s::Int64, interval_s::Int64,
             graph = SimpleWeightedGraph(sources, destinations, weights)
         end
     end
+end
+
+function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment)
+    path_probs = fill(Inf, nv(g), nv(g))
+    path_probs[diagind(path_probs)] .= 0
+    for edge ∈ edges(g)
+        source = min(src(edge), dst(edge))
+        destination = max(src(edge), dst(edge))
+        path_probs[source, destination] = g.weights[source, destination]
+    end
+    for k ∈ 2:nv(g)-1
+        if experiment == Val(:REF)
+            if types[k] == gs
+                continue
+            end
+            node_cost = decibel_to_probability(reflector_loss())
+        end
+        if experiment == Val(:DD)
+            node_cost = types[k] == gs ? swapping_loss() : 1
+        end
+        for i ∈ 1:k-1
+            if experiment == Val(:DD) && types[k] == types[i]
+                continue
+            end
+            for j ∈ k+1:nv(g)
+                if experiment == Val(:DD) && types[k] == types[j]
+                    continue
+                end
+                path_probs[i, j] = min(path_probs[i, j], path_probs[i, k] * path_probs[k, j] * node_cost)
+            end
+        end
+    end
+    # TODO: determine, aggregate, and return the relevant paths
 end
