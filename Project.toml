@@ -15,6 +15,7 @@ SatelliteToolboxBase = "9e17983a-0463-41a7-9a16-1682db6d8b66"
 SatelliteToolboxPropagators = "c2b69894-ea78-4e2b-9ba6-cedbbc3d14d7"
 SatelliteToolboxTle = "7ff27aeb-5fff-4337-a9ee-a9fe6b7ed35e"
 SatelliteToolboxTransformations = "6b019ec1-7a1e-4f04-96c7-a9db1ca5514d"
+SimpleWeightedGraphs = "47aef6b3-ad0c-573a-a1e2-d07658019622"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
@@ -29,6 +30,7 @@ SatelliteToolboxBase = "1.0.0"
 SatelliteToolboxPropagators = "1.0.0"
 SatelliteToolboxTle = "1.1.0"
 SatelliteToolboxTransformations = "1.0.0"
+SimpleWeightedGraphs = "1.5.0"
 StaticArrays = "1.9.14"
 julia = "1.6.7"
 
