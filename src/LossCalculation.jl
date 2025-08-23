@@ -21,7 +21,7 @@ Calculate the geometric loss for a channel.
 # Returns
 - The total geometric loss in decibels.
 """
-function geometric_loss_dB(channel::FreespaceChannel)
+function geometric_loss(channel::FreespaceChannel)
     20 * log10((channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) / channel.receiver_diameter_m)
 end
 
@@ -35,15 +35,15 @@ Calculate the distance over which the channel passes through the atmosphere.
 # Returns
 - The distance that the channel passes through the atmosphere in meters.
 """
-function atmosphere_distance(channel::FreespaceChannel, atmosphere_height_m::Num64=18e3)
-    if elevation_angle_rad == 0
+function atmosphere_distance(channel::FreespaceChannel, atmosphere_height_m::Number=18e3)
+    if channel.elevation_angle_rad == 0
         atmospheric_distance = 0
     else
         relative_elevation = channel.distance_m * sin(channel.elevation_angle_rad)
         atmospheric_elevation = min(relative_elevation, atmosphere_height_m - channel.min_altitude_m)
         atmospheric_distance = atmospheric_elevation / sin(channel.elevation_angle_rad)
     end
-    atmospheric_distance
+    return atmospheric_distance
 end
 
 """
@@ -55,8 +55,8 @@ Calculate the atmospheric loss for a channel.
 # Returns
 - The total atmospheric loss in decibels.
 """
-function atmospheric_loss_dB(channel::FreespaceChannel)
-    atmosphere_distance = atmosphere_distance(channel)
+function atmospheric_loss(channel::FreespaceChannel)
+    atm_distance = atmosphere_distance(channel)
     # Transmittance loss
     if channel.wavelength_nm == 550
         molecular_absorption = 0.13
@@ -70,7 +70,8 @@ function atmospheric_loss_dB(channel::FreespaceChannel)
         throw("Molecular absorption is not defined for other wavelengths")
     end
 
-    transmittance_loss = molecular_absorption * (atmosphere_distance / 1000)
+    transmittance_loss = molecular_absorption * (atm_distance / 1000)
+    return transmittance_loss
 
     # Weather loss - to be finished later
     # if channel.conditions == fog
@@ -104,9 +105,9 @@ Calculate the pointing loss for a channel.
 # Returns
 - The total pointing loss in decibels.
 """
-function pointing_loss_dB(channel::FreespaceChannel, pointing_jitter::Num64=5)
+function pointing_loss(channel::FreespaceChannel, pointing_jitter::Num64=5)
     # L_PNT = exp(-8Θ²ⱼ/w²₀)
-    exp(-8 * (pointing_jitter * 1e-6)^2 / waist_radius(channel)^2)
+    exp(-8 * (pointing_jitter * 10^-6)^2 / waist_radius(channel)^2)
 
 end
 

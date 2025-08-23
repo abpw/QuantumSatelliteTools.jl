@@ -604,41 +604,42 @@ function FreespaceChannel(sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4; 
 end
 
 """
-Calculate total loss in a freespace channel.
+Calculate transmissivity in a freespace channel.
 
 # Arguments
 - `channel::FreespaceChannel`: A freespace channel.
 
 # Returns
-- The probability of a failed transmission through the channel.
+- The probability of a successful transmission through the channel.
 """
-function total_loss(channel::FreespaceChannel)
+function transmissivity(channel::FreespaceChannel)
     # L_tot = L_geo + L_atm + L_pnt
-    10^((geometric_loss(channel) + atmospheric_loss(channel) + pointing_loss(channel)) / 20)
+    1 - 10^((geometric_loss(channel) + atmospheric_loss(channel) + pointing_loss(channel)) / 20)
 end
 
-# struct Path <: Vector{Union{OrbitPropagatorSgp4,Tuple{Number}}}
-# end
+struct Path
+    path:: Vector{Union{OrbitPropagatorSgp4,Tuple{Number}}}
+end
 
-# function path_transmissivity(::Val{:REF}, path::Path)
-#     transmission_probability = 1
-#     # Uplink losses
-#     transmission_probability *= transmissivity(FreespaceChannel(path[2], path[1]))
-#     # Inter-satellite and downlink losses
-#     for i in 3:length(path)-1
-#         transmission_probability *= transmissivity(FreespaceChannel(path[i], path[i+1]))
-#     end
-#     # Reflector losses
-#     transmission_probability *= (1 - decibel_to_probability(reflector_loss()))^(length(path) - 2)
-# end
+function path_transmissivity(::Val{:REF}, path::Path)
+    transmission_probability = 1
+    # Uplink losses
+    transmission_probability *= transmissivity(FreespaceChannel(path[2], path[1]))
+    # Inter-satellite and downlink losses
+    for i in 3:length(path)-1
+        transmission_probability *= transmissivity(FreespaceChannel(path[i], path[i+1]))
+    end
+    # Reflector losses
+    transmission_probability *= (1 - decibel_to_probability(reflector_loss()))^(length(path) - 2)
+end
 
-# function path_transmissivity(::Val{:DD}, path::Path)
-#     transmission_probability = 1
-#     # Dual-downlink channel losses
-#     for i in 1:2:length(path.path)
-#         transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i]))
-#         transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i+2]))
-#     end
-#     # Entanglement swapping losses
-#     transmission_probability *= swapping_loss()^((length(path) - 3) / 2)
-# end
+function path_transmissivity(::Val{:DD}, path::Path)
+    transmission_probability = 1
+    # Dual-downlink channel losses
+    for i in 1:2:length(path.path)
+        transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i]))
+        transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i+2]))
+    end
+    # Entanglement swapping losses
+    transmission_probability *= swapping_loss()^((length(path) - 3) / 2)
+end

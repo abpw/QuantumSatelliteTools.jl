@@ -5,7 +5,7 @@ using SatelliteToolboxTle, SatelliteToolboxPropagators, SatelliteToolboxTransfor
 using SatelliteAnalysis
 using Downloads, CSV, Random, Dates, StaticArrays
 
-export AstronomyGeometry, GenerateGroundStations, GenerateTLEs, VisualizeMap
+export AstronomyGeometry, GenerateGroundStations, GenerateTLEs, VisualizeMap, LossCalculation
 
 module AstronomyGeometry
 export semimajor_radius, semiminor_radius, G, earth_mass_kg, seconds_per_day, equatorial_circumference_km, sin_60
@@ -30,9 +30,15 @@ export refresh_satcat, update_starlink_tles, save_TLEs, get_active_satellite_TLE
 include("GenerateTLEs.jl")
 end
 
-# module VisualizeMap
-# export plot_gses
-# include("VisualizeMap.jl")
-# end
+module VisualizeMap
+export plot_gses
+include("VisualizeMap.jl")
+end
+
+module LossCalculation
+using ..AstronomyGeometry: FreespaceChannel, Num64
+export waist_radius, geometric_loss, atmosphere_distance, atmospheric_loss, pointing_loss, reflector_loss, swapping_loss
+include("LossCalculation.jl")
+end
 
 end

@@ -310,4 +310,166 @@ using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
             @test all(-π .<= last.(gses) .<= π)
         end
     end
+    @testset "LossCalculation.jl" begin
+        using QuantumSatelliteTools.AstronomyGeometry: FreespaceChannel, clear, umbra
+        using QuantumSatelliteTools.LossCalculation: waist_radius, geometric_loss, atmosphere_distance, atmospheric_loss, pointing_loss, reflector_loss, swapping_loss
+        
+        @testset "waist_radius" begin
+            # Test basic waist radius calculation
+            # w₀ = 1.22λ/D_t where λ = 1550nm = 1550e-9m, D_t = 0.6m
+            channel = FreespaceChannel(1000.0, 0.5, 0.0, 0.6, 0.6, 1550, clear, umbra)
+            expected_waist = 1.22 * (1550e-9) / 0.6
+            @test isapprox(waist_radius(channel), expected_waist; rtol=1e-10)
+            
+            # Test with different wavelength and diameter
+            channel2 = FreespaceChannel(1000.0, 0.5, 0.0, 1.2, 0.6, 850, clear, umbra)
+            expected_waist2 = 1.22 * (850e-9) / 1.2
+            @test isapprox(waist_radius(channel2), expected_waist2; rtol=1e-10)
+            
+            # Test scaling behavior
+            channel3 = FreespaceChannel(1000.0, 0.5, 0.0, 0.3, 0.6, 1550, clear, umbra)
+            @test waist_radius(channel3) ≈ 2 * waist_radius(channel)  # half diameter = double waist
+        end
+        
+        @testset "geometric_loss" begin
+            # Test geometric loss calculation
+            # L_geo = 20*log10((D_t + d*w₀)/D_r)
+            channel = FreespaceChannel(1000.0, 0.5, 0.0, 0.6, 0.6, 1550, clear, umbra)
+            w0 = waist_radius(channel)
+            expected_loss = 20 * log10((0.6 + 1000.0 * w0) / 0.6)
+            @test isapprox(geometric_loss(channel), expected_loss; rtol=1e-10)
+            
+            # Test with different parameters
+            channel2 = FreespaceChannel(500.0, 0.5, 0.0, 1.2, 0.3, 1550, clear, umbra)
+            w0_2 = waist_radius(channel2)
+            expected_loss2 = 20 * log10((1.2 + 500.0 * w0_2) / 0.3)
+            @test isapprox(geometric_loss(channel2), expected_loss2; rtol=1e-10)
+            
+            # Loss should increase with distance
+            channel_far = FreespaceChannel(2000.0, 0.5, 0.0, 0.6, 0.6, 1550, clear, umbra)
+            @test geometric_loss(channel_far) > geometric_loss(channel)
+        end
+        
+        @testset "atmosphere_distance" begin
+            # Test atmosphere distance calculation with different elevation angles
+            channel_horizontal = FreespaceChannel(1000.0, 0.0, 0.0, 0.6, 0.6, 1550, clear, umbra)
+            @test atmosphere_distance(channel_horizontal) == 0  # horizontal should be 0
+            
+            # Test with non-zero elevation
+            channel_elevated = FreespaceChannel(1000.0, π/6, 100.0, 0.6, 0.6, 1550, clear, umbra)  # 30 degrees
+            atm_dist = atmosphere_distance(channel_elevated)
+            @test atm_dist > 0
+            
+            # Test with custom atmosphere height
+            atm_dist_custom = atmosphere_distance(channel_elevated, 20e3)
+            @test atm_dist_custom >= 0
+            
+            # Test that higher elevation angles give different results
+            channel_steep = FreespaceChannel(1000.0, π/3, 100.0, 0.6, 0.6, 1550, clear, umbra)  # 60 degrees
+            @test atmosphere_distance(channel_steep) != atmosphere_distance(channel_elevated)
+        end
+        
+        @testset "atmospheric_loss" begin
+            # Test atmospheric loss for supported wavelengths
+            wavelengths = [550, 690, 850, 1550]
+            expected_absorptions = [0.13, 0.01, 0.41, 0.01]
+            
+            for (wl, expected_abs) in zip(wavelengths, expected_absorptions)
+                channel = FreespaceChannel(1000.0, π/4, 100.0, 0.6, 0.6, wl, clear, umbra)
+                loss = atmospheric_loss(channel)
+                @test loss isa Number
+                @test loss >= 0  # Loss should be non-negative
+            end
+            
+            # Test that unsupported wavelength throws error
+            channel_bad = FreespaceChannel(1000.0, π/4, 100.0, 0.6, 0.6, 1000, clear, umbra)
+            @test_throws String atmospheric_loss(channel_bad)
+            
+            # Test zero distance gives specific behavior
+            channel_zero = FreespaceChannel(1000.0, 0.0, 100.0, 0.6, 0.6, 550, clear, umbra)
+            # Should handle zero atmosphere distance gracefully
+            @test atmospheric_loss(channel_zero) isa Number
+        end
+        
+        @testset "pointing_loss" begin
+            # Test pointing loss calculation
+            # L_PNT = exp(-8Θ²ⱼ/w²₀)
+            channel = FreespaceChannel(1000.0, π/4, 100.0, 0.6, 0.6, 1550, clear, umbra)
+            w0 = waist_radius(channel)
+            
+            # Test with default jitter (5 microradians)
+            jitter_default = 5
+            expected_loss = exp(-8 * (jitter_default * 1e-6)^2 / w0^2)
+            @test isapprox(pointing_loss(channel), expected_loss; rtol=1e-10)
+            
+            # Test with custom jitter
+            jitter_custom = 10
+            expected_loss_custom = exp(-8 * (jitter_custom * 1e-6)^2 / w0^2)
+            @test isapprox(pointing_loss(channel, jitter_custom), expected_loss_custom; rtol=1e-10)
+            
+            # Test that larger jitter gives smaller transmission (larger loss)
+            @test pointing_loss(channel, 10) < pointing_loss(channel, 5)
+            
+            # Test that result is between 0 and 1 (probability)
+            loss = pointing_loss(channel)
+            @test 0 <= loss <= 1
+        end
+        
+        @testset "reflector_loss" begin
+            # Test that reflector loss returns the expected constant value
+            loss = reflector_loss()
+            @test loss ≈ 5.854678746311231
+            @test loss > 0  # Should be positive loss in dB
+        end
+        
+        @testset "swapping_loss" begin
+            # Test swapping loss calculation
+            # swapping_loss = 0.5 * memory_read_write_loss
+            
+            # Test with default parameter
+            default_loss = swapping_loss()
+            @test default_loss ≈ 0.5 * 0.8  # 0.5 * default 0.8
+            
+            # Test with custom parameter
+            custom_rw_loss = 0.9
+            custom_loss = swapping_loss(custom_rw_loss)
+            @test custom_loss ≈ 0.5 * custom_rw_loss
+            
+            # Test that result is a probability (between 0 and 1)
+            @test 0 <= swapping_loss() <= 1
+            @test 0 <= swapping_loss(0.95) <= 1
+            
+            # Test edge cases
+            @test swapping_loss(0.0) == 0.0
+            @test swapping_loss(1.0) == 0.5
+        end
+        
+        @testset "Integration tests" begin
+            # Test that all loss functions work together with a realistic channel
+            using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
+            using SatelliteToolboxBase: OrbitStateVector
+            tles = generate_regular_array_TLEs(orbits=1, sats_per_orbit=4, altitude_km=550)
+            sat = Propagators.init(Val(:SGP4), tles[1])
+            
+            # Create a channel to subsatellite point
+            sv = Propagators.propagate!(sat, 0, OrbitStateVector)
+            lat, lon, _ = eci_to_geodetic(sv)
+            
+            channel = FreespaceChannel(sat, (lat, lon, 0.0); 
+                                     time=sat.sgp4d.epoch, 
+                                     min_θ=deg2rad(0),
+                                     wavelength_nm=1550)
+            
+            if channel !== nothing
+                # Test that all loss functions return reasonable values
+                @test waist_radius(channel) > 0
+                @test geometric_loss(channel) > 0  # Should have some geometric loss
+                @test atmosphere_distance(channel) >= 0
+                @test atmospheric_loss(channel) isa Number
+                @test 0 <= pointing_loss(channel) <= 1
+                @test reflector_loss() > 0
+                @test 0 <= swapping_loss() <= 1
+            end
+        end
+    end
 end
