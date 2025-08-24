@@ -56,7 +56,6 @@ Helper to add edge data to three edge data arrays.
 # Returns
 - nothing
 """
-
 function edge_data!(source::Union{OrbitPropagatorSgp4,Tuple{Float64}},
         destination::Union{OrbitPropagatorSgp4,Tuple{Float64}},
         node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64},
@@ -185,5 +184,5 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
             end
         end
     end
-    return sum([path_probs[i,j] for i ∈ vertices(g) if types[i] == gs for j ∈ vertices(g) if types[j] == gs && j != i])
+    return sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == gs for j ∈ i+1:nv(g) if types[j] == gs])
 end
