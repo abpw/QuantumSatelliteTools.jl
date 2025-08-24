@@ -42,6 +42,82 @@ GSES = [
 end
 
 """
+Helper to add edge data to three edge data arrays.
+
+# Arguments
+- `source::Union{OrbitPropagatorSgp4,Tuple{Float64}}`: A source entity.
+- `destination::Union{OrbitPropagatorSgp4,Tuple{Float64}}`: A destination entity.
+- `node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64}`: A node map of entities to integer values.
+- `time::Float64`: The time of the transmission.
+- `sources::Vector{Int64}`: An array of sources for a graph.
+- `destinations::Vector{Int64}`: An array of destinations for a graph.
+- `weights::Vector{Float64}`: An array of weights for a graph.
+
+# Returns
+- nothing
+"""
+
+function edge_data!(source::Union{OrbitPropagatorSgp4,Tuple{Float64}},
+        destination::Union{OrbitPropagatorSgp4,Tuple{Float64}},
+        node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64},
+        time::Float64,
+        sources::Vector{Int64},
+        destinations::Vector{Int64},
+        weights::Vector{Float64})
+    channel = FreespaceChannel(source, destination, time)
+    if !isnothing(channel)
+        push!(sources, node_map[source])
+        push!(destinations, node_map[destination])
+        push!(weights, transmissivity(channel))
+    end
+end
+
+"""
+Create a graph representing a quatum satellite network at a point in time.
+
+# Arguments
+- `propagators::Vector{OrbitPropagatorSgp4}`: An array of orbit propagators
+                                              representing the satellites in
+                                              the network.
+- `gses::Vector{Tuple{Float64}}`: An array of tuples holding the coordinates of
+                                  the ground stations in the network.
+- `node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64}`:
+                            A map of entities to integer values.
+- `time::Float64`: The time that the graph takes place.
+- `experiment::Union{Val(:REF), Val(:DD)}`: The type of experiment.
+                                            REF - inter-satellite reflectors
+                                            DD - dual-downlink
+
+# Returns
+- SimpleWeightedGraph: A graph representing a quantum satellite network with
+                       nodes of type Union{OrbitPropagatorSgp4,Tuple{Float64}}
+                       representing satellites and ground stations and edges
+                       with weights representing channel transmissivity.
+"""
+function make_graph(propagators::Vector{OrbitPropagatorSgp4},
+        gses::Vector{Tuple{Float64}},
+        node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64},
+        time::Float64,
+        experiment::Union{Val(:REF), Val(:DD)})
+    sources, destinations, weights =
+        Vector{Int64}(), Vector{Int64}(), Vector{Float64}()
+    for propagator ∈ propagators
+        for gs ∈ gses
+            edge_data!(propagator, gs, node_map, time, sources, destinations, weights)
+        end
+    end
+    if experiment == Val(:REF)
+        for i ∈ eachindex(propagators)
+            for j ∈ i+1:length(propagators)
+                edge_data!(propagators[i], propagators[j], node_map, time, sources, destinations, weights)
+            end
+        end
+    end
+    SimpleWeightedGraph(sources, destinations, weights)
+end
+
+
+"""
 Conduct a simulation of a quantum satellite network.
 
 # Arguments
@@ -57,36 +133,25 @@ function simulation_driver(duration_s::Int64, interval_s::Int64,
         aux_gses::Union{Vector{Tuple{Float64}}, Missing}=missing)
     # Downloading Starlink TLEs 8.21.2025
     tles = read_tles_from_file(joinpath(@__DIR__, "../databases/starlink.tle"))
-    propagators = [Propagators.init(Val(:SGP4), tle) for tle in tles]
+    propagators = [Propagators.init(Val(:SGP4), tle) for tle ∈ tles]
     aux_gses = ismissing(aux_gses) ? [] : aux_gses
 
     # Map entity to an integer index
     node_map = Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64}(
-        node => index for (index, node) in enumerate(vcat(propagators, gses, aux_gses)))
+        node => index for (index, node) ∈ enumerate(vcat(propagators, gses, aux_gses)))
 
     # Map integer index of entity to entity type
     types = Dict{Int64, Entities}(
-        node_map[propagator] => sat for propagator in propagators)
+        node_map[propagator] => sat for propagator ∈ propagators)
     merge!(types, Dict{Int64, Entities}(
-        node_map[gs] => gs for gs in gses))
+        node_map[gs] => gs for gs ∈ gses))
     merge!(types, Dict{Int64, Entities}(
-        node_map[aux_gs] => aux_gs for aux_gs in aux_gses))
+        node_map[aux_gs] => aux_gs for aux_gs ∈ aux_gses))
 
-    for experiment in [Val(:REF), Val(:DD)]
-        for time_elapsed in 0:interval_s:duration_s-1
-            sources, destinations, weights =
-                Vector{Int64}(), Vector{Int64}(), Vector{Float64}()
-            for propagator in propagators
-                for gs in gses
-                    channel = FreespaceChannel(propagator, gs, time=epoch+time_elapsed)
-                    if !isnothing(channel)
-                        push!(sources, node_map[propagator])
-                        push!(destinations, node_map[gs])
-                        push!(weights, transmissivity(channel))
-                    end
-                end
-            end
-            graph = SimpleWeightedGraph(sources, destinations, weights)
+    # Perform experiments
+    for experiment ∈ [Val(:REF), Val(:DD)]
+        for time_elapsed ∈ 0:interval_s:duration_s-1
+            make_graph(propagators, gses, node_map, epoch+time_elapsed, experiment)
         end
     end
 end
