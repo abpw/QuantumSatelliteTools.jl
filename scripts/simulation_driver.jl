@@ -92,8 +92,7 @@ function simulation_driver(duration_s::Int64, interval_s::Int64,
 end
 
 function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment)
-    path_probs = fill(Inf, nv(g), nv(g))
-    path_probs[diagind(path_probs)] .= 0
+    path_probs = zeros(nv(g), nv(g)) + I
     for edge ∈ edges(g)
         source = min(src(edge), dst(edge))
         destination = max(src(edge), dst(edge))
@@ -101,25 +100,25 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
     end
     for k ∈ 2:nv(g)-1
         if experiment == Val(:REF)
-            if types[k] == gs
+            if types[k] != sat
                 continue
             end
             node_cost = decibel_to_probability(reflector_loss())
         end
         if experiment == Val(:DD)
-            node_cost = types[k] == gs ? swapping_loss() : 1
+            node_cost = types[k] == sat ? 1 : swapping_loss()
         end
         for i ∈ 1:k-1
-            if experiment == Val(:DD) && types[k] == types[i]
+            if experiment == Val(:DD) && !xor(types[k] == sat, types[i] == sat)
                 continue
             end
             for j ∈ k+1:nv(g)
-                if experiment == Val(:DD) && types[k] == types[j]
+                if experiment == Val(:DD) && !xor(types[k] == sat, types[j] == sat)
                     continue
                 end
                 path_probs[i, j] = min(path_probs[i, j], path_probs[i, k] * path_probs[k, j] * node_cost)
             end
         end
     end
-    # TODO: determine, aggregate, and return the relevant paths
+    return sum([path_probs[i,j] for i ∈ vertices(g) if types[i] == gs for j ∈ vertices(g) if types[j] == gs && j != i])
 end
