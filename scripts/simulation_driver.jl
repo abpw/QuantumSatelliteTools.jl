@@ -168,8 +168,7 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
                 continue
             end
             node_cost = decibel_to_probability(reflector_loss())
-        end
-        if experiment == Val(:DD)
+        else
             node_cost = types[k] == sat ? 1 : swapping_loss()
         end
         for i ∈ 1:nv(g)
