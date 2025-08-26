@@ -155,14 +155,14 @@ function simulation_driver(duration_s::Int64, interval_s::Int64,
     end
 end
 
-function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment)
+function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Union{Val{:DD}, Val{:REF}})
     path_probs = zeros(nv(g), nv(g)) + I
     for edge ∈ edges(g)
         source = min(src(edge), dst(edge))
         destination = max(src(edge), dst(edge))
         path_probs[source, destination] = g.weights[source, destination]
     end
-    for k ∈ 2:nv(g)-1
+    for k ∈ 1:nv(g)
         if experiment == Val(:REF)
             if types[k] != sat
                 continue
@@ -172,11 +172,17 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
         if experiment == Val(:DD)
             node_cost = types[k] == sat ? 1 : swapping_loss()
         end
-        for i ∈ 1:k-1
+        for i ∈ 1:nv(g)
+            if i == k
+                continue
+            end
             if experiment == Val(:DD) && !xor(types[k] == sat, types[i] == sat)
                 continue
             end
-            for j ∈ k+1:nv(g)
+            for j ∈ i+1:nv(g)
+                if j == k
+                    continue
+                end
                 if experiment == Val(:DD) && !xor(types[k] == sat, types[j] == sat)
                     continue
                 end
