@@ -1,11 +1,11 @@
 module QuantumSatelliteTools
 
-using PyPlot, GeoDatasets
+using GeoDatasets
 using SatelliteToolboxTle, SatelliteToolboxPropagators, SatelliteToolboxTransformations, SatelliteToolboxBase
 using SatelliteAnalysis
 using Downloads, CSV, Random, Dates, StaticArrays
 
-export AstronomyGeometry, GenerateGroundStations, GenerateTLEs, VisualizeMap
+export AstronomyGeometry, GenerateGroundStations, GenerateTLEs, FreespaceChannelStruct, LossCalculation
 
 module AstronomyGeometry
 export semimajor_radius, semiminor_radius, G, earth_mass_kg, seconds_per_day, equatorial_circumference_km, sin_60
@@ -15,7 +15,6 @@ export gs_gs_distance, sat_sat_distance
 export LightCondition, sunlight, penumbra, umbra
 export sun_position, light_at_point
 export Conditions, clear, fog, rain, snow
-export FreespaceChannel
 include("AstronomyGeometry.jl")
 end
 
@@ -30,9 +29,14 @@ export refresh_satcat, update_starlink_tles, save_TLEs, get_active_satellite_TLE
 include("GenerateTLEs.jl")
 end
 
-# module VisualizeMap
-# export plot_gses
-# include("VisualizeMap.jl")
-# end
+module FreespaceChannelStruct
+export FreespaceChannel
+include("FreespaceChannelStruct.jl")
+end
+
+module LossCalculation
+export atmospheric_loss_dB, geometric_loss_dB, pointing_loss_dB, reflector_loss, swapping_loss, total_loss
+include("LossCalculation.jl")
+end
 
 end

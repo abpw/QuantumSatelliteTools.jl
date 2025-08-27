@@ -2,10 +2,9 @@ using SatelliteToolboxBase: OrbitStateVector
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
 using SatelliteToolboxTle: TLE
 using SatelliteToolboxTransformations
-using SatelliteToolboxTransformations: WGS84_ELLIPSOID, Ellipsoid
 import SatelliteToolboxTransformations: ecef_to_geodetic, geodetic_to_ecef
 using Dates: DateTime, datetime2julian
-using SatelliteAnalysis: is_ground_facility_visible, lighting_condition
+using SatelliteAnalysis: lighting_condition
 using SatelliteToolboxBase: JD_J2000
 using StaticArrays: SVector
 
@@ -20,9 +19,8 @@ const seconds_per_day = 60 * 60 * 24
 const equatorial_circumference_km = semimajor_radius / 500 * π
 const sin_60 = √3 / 2
 
-GS = Union{NTuple{2,T},NTuple{3,T},SVector{2,T},SVector{3,T}} where T<:Number
-Num64 = Union{Float64,Int64}
-Point3D = Union{SVector{3,Float64},SVector{3,Int64},NTuple{3,Num64}}
+GS = Union{NTuple{2,Number},NTuple{3,Number},SVector{2,Number},SVector{3,Number}}
+Point3D = Union{SVector{3,T},NTuple{3,T}} where T <: Number
 
 """
 Compute the Euclidean norm of a 3D point.
@@ -61,9 +59,9 @@ end
 Convert ECEF coordinates (x, y, z) to geodetic coordinates.
 
 # Arguments
-- `x::Num64`: X coordinate in ECEF.
-- `y::Num64`: Y coordinate in ECEF.
-- `z::Num64`: Z coordinate in ECEF.
+- `x::Number`: X coordinate in ECEF.
+- `y::Number`: Y coordinate in ECEF.
+- `z::Number`: Z coordinate in ECEF.
 
 # Keyword Arguments
 - `ellipsoid`: Ellipsoid model to use (defaults to WGS84).
@@ -71,7 +69,7 @@ Convert ECEF coordinates (x, y, z) to geodetic coordinates.
 # Returns
 - Geodetic coordinates (geodetic latitude in radians, geodetic latitude in radians, height in meters).
 """
-function ecef_to_geodetic(x::Num64, y::Num64, z::Num64; ellipsoid::Ellipsoid{T}=WGS84_ELLIPSOID) where T<:Number
+function ecef_to_geodetic(x::Number, y::Number, z::Number; ellipsoid::Ellipsoid{T}=WGS84_ELLIPSOID) where T<:Number
     return ecef_to_geodetic([x, y, z], ellipsoid=ellipsoid)
 end
 
@@ -117,7 +115,7 @@ end
 Convert ECI satellite propagator to ECEF coordinates.
 
 # Arguments
-- `sat::OrbitPropagatorSgp4`: Satellite propagator.
+- `sat::OrbitPropagatorSgp4{Float64, Float64}`: Satellite propagator.
 
 # Keyword Arguments
 - `time::Union{Number, DateTime}`: Time of conversion (defaults to satellite epoch).
@@ -125,7 +123,7 @@ Convert ECI satellite propagator to ECEF coordinates.
 # Returns
 - ECEF position vector.
 """
-function eci_to_ecef(sat::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing)
+function eci_to_ecef(sat::OrbitPropagatorSgp4{Float64, Float64}; time::Union{Number,DateTime,Missing}=missing)
     return eci_to_ecef(Propagators.propagate!(sat, 0, OrbitStateVector), time=time)
 end
 
@@ -149,9 +147,9 @@ end
 Convert ECI coordinates (x, y, z) to ECEF coordinates.
 
 # Arguments
-- `x::Num64`: ECI X coordinate in meters.
-- `y::Num64`: ECI Y coordinate in meters.
-- `z::Num64`: ECI Z coordinate in meters.
+- `x::Number`: ECI X coordinate in meters.
+- `y::Number`: ECI Y coordinate in meters.
+- `z::Number`: ECI Z coordinate in meters.
 
 # Keyword Arguments
 - `time::Union{Number, DateTime}`: Julian time of conversion.
@@ -159,7 +157,7 @@ Convert ECI coordinates (x, y, z) to ECEF coordinates.
 # Returns
 - ECEF position vector in meters.
 """
-function eci_to_ecef(x::Num64, y::Num64, z::Num64; time::Union{Number,DateTime})
+function eci_to_ecef(x::Number, y::Number, z::Number; time::Union{Number,DateTime})
     return eci_to_ecef((x, y, z), time=time)
 end
 
@@ -186,7 +184,7 @@ end
 Convert satellite propagator to geodetic coordinates.
 
 # Arguments
-- `sat::OrbitPropagatorSgp4`: Satellite propagator (see [SatelliteToolboxPropagators.jl](https://github.com/JuliaSpace/SatelliteToolboxPropagators.jl)).
+- `sat::OrbitPropagatorSgp4{Float64, Float64}`: Satellite propagator (see [SatelliteToolboxPropagators.jl](https://github.com/JuliaSpace/SatelliteToolboxPropagators.jl)).
 
 # Keyword Arguments
 - `time::Union{Number, DateTime}`: Time of conversion (defaults to the satellite epoch).
@@ -194,7 +192,7 @@ Convert satellite propagator to geodetic coordinates.
 # Returns
 - Geodetic coordinates (geodetic latitude in radians, geodetic lon in radians, height in meters).
 """
-function eci_to_geodetic(sat::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing)
+function eci_to_geodetic(sat::OrbitPropagatorSgp4{Float64, Float64}; time::Union{Number,DateTime,Missing}=missing)
     return eci_to_geodetic(Propagators.propagate!(sat, 0, OrbitStateVector), time=time)
 end
 
@@ -218,9 +216,9 @@ end
 Convert ECI coordinates (x, y, z) to geodetic coordinates.
 
 # Arguments
-- `x::Num64`: ECI X coordinate in meters.
-- `y::Num64`: ECI Y coordinate in meters.
-- `z::Num64`: ECI Z coordinate in meters.
+- `x::Number`: ECI X coordinate in meters.
+- `y::Number`: ECI Y coordinate in meters.
+- `z::Number`: ECI Z coordinate in meters.
 
 # Keyword Arguments
 - `time::Union{Number, DateTime}`: Julian time of conversion.
@@ -228,7 +226,7 @@ Convert ECI coordinates (x, y, z) to geodetic coordinates.
 # Returns
 - Geodetic coordinates (latitude in radians, geodetic lon in radians, height in meters).
 """
-function eci_to_geodetic(x::Num64, y::Num64, z::Num64; time::Union{Number,DateTime})
+function eci_to_geodetic(x::Number, y::Number, z::Number; time::Union{Number,DateTime})
     return eci_to_geodetic((x, y, z), time=time)
 end
 
@@ -236,8 +234,8 @@ end
 Compute the intersection points between an ellipsoid and a line segment.
 
 # Arguments
-- `major::Num64`: Semimajor axis of the ellipsoid.
-- `minor::Num64`: Semiminor axis of the ellipsoid.
+- `major::Number`: Semimajor axis of the ellipsoid.
+- `minor::Number`: Semiminor axis of the ellipsoid.
 - `point1::Point3D`: First point defining the line in the ECEF or ECI reference frame.
 - `point2::Point3D`: Second point defining the line in the ECEF or ECI reference frame.
 
@@ -247,7 +245,7 @@ Compute the intersection points between an ellipsoid and a line segment.
 # Returns
 - A vector of 0, 1, or 2 intersection points as tuples in the same reference frame as the inputs (ECI or ECEF).
 """
-function ellipsoid_line_intersection(major::Num64, minor::Num64, point1::Point3D, point2::Point3D; only_between::Bool=false)
+function ellipsoid_line_intersection(major::Number, minor::Number, point1::Point3D, point2::Point3D; only_between::Bool=false)
     x1, y1, z1 = point1
     x2, y2, z2 = point2
 
@@ -353,8 +351,8 @@ end
 Compute the distance between two satellites at a given time.
 
 # Arguments
-- `sat_prop1::OrbitPropagatorSgp4`: First satellite propagator (see [SatelliteToolboxPropagators.jl](https://github.com/JuliaSpace/SatelliteToolboxPropagators.jl)).
-- `sat_prop2::OrbitPropagatorSgp4`: Second satellite propagator.
+- `sat_prop1::OrbitPropagatorSgp4{Float64, Float64}`: First satellite propagator (see [SatelliteToolboxPropagators.jl](https://github.com/JuliaSpace/SatelliteToolboxPropagators.jl)).
+- `sat_prop2::OrbitPropagatorSgp4{Float64, Float64}`: Second satellite propagator.
 
 # Keyword Arguments
 - `time::Union{Number, DateTime}`: Time of distance calculation (defaults to the later epoch of the satellites).
@@ -362,7 +360,7 @@ Compute the distance between two satellites at a given time.
 # Returns
 - Distance in meters or `nothing` if obstructed.
 """
-function sat_sat_distance(sat_prop1::OrbitPropagatorSgp4, sat_prop2::OrbitPropagatorSgp4; time::Union{Number,DateTime,Missing}=missing)
+function sat_sat_distance(sat_prop1::OrbitPropagatorSgp4{Float64, Float64}, sat_prop2::OrbitPropagatorSgp4{Float64, Float64}; time::Union{Number,DateTime,Missing}=missing)
     if time === missing
         time = max(sat_prop1.sgp4d.epoch, sat_prop2.sgp4d.epoch)
     end
@@ -459,186 +457,3 @@ function light_at_point(point_eci::Point3D, time::Union{Number,DateTime})
         return umbra
     end
 end
-
-"""
-Convert a loss value from decibels to probability.
-
-# Arguments
-- `loss_dB::Num64`: The loss in decibels.
-
-# Returns
-- The loss as a probability (0 - 1).
-"""
-function decibels_to_probability(loss_dB::Num64)
-    10^(loss_dB / 20)
-end
-
-@enum Conditions begin
-    clear
-    fog
-    rain
-    snow
-end
-# TODO doctring for struct
-
-struct FreespaceChannel
-    distance_m::Number
-    elevation_angle_rad::Number
-    min_altitude_m::Number
-    transmitter_diameter_m::Number
-    receiver_diameter_m::Number
-    wavelength_nm::Number
-    conditions::Conditions
-    light_condition::LightCondition
-end
-
-"""
-Create a FreespaceChannel with specified parameters.
-
-# Arguments
-- `distance_m::Num64`: Distance in meters.
-- `elevation_angle_rad::Num64`: Elevation angle in radians.
-
-# Keyword Arguments
-- `transmitter_diameter_m::Number`: Diameter of the transmitting telescope in meters (default 0.6).
-- `receiver_diameter_m::Number`: Diameter of the receiving telescope in meters (default 0.6).
-- `wavelength_nm::Number`: Wavelength in nanometers (default 1550).
-- `min_altitude_m::Num64`: Minimum altitude in meters (default 0).
-- `conditions::Conditions`: Atmospheric conditions (default clear).
-- `light_condition::LightCondition`: Lighting condition (default umbra).
-
-# Returns
-- `FreespaceChannel`: A new FreespaceChannel instance.
-"""
-function FreespaceChannel(distance_m::Num64, elevation_angle_rad::Num64; min_altitude_m::Num64=0, transmitter_diameter_m::Num64=0.6, receiver_diameter_m::Num64=0.6, wavelength_nm::Num64=1550, conditions::Conditions=clear, light_condition::LightCondition=umbra)
-    return FreespaceChannel(distance_m, elevation_angle_rad, min_altitude_m, transmitter_diameter_m, receiver_diameter_m, wavelength_nm, conditions, light_condition)
-end
-
-"""
-Create a FreespaceChannel between a satellite and a ground station.
-
-# Arguments
-- `sat::OrbitPropagatorSgp4`: Satellite propagator (see [SatelliteToolboxPropagators.jl](https://github.com/JuliaSpace/SatelliteToolboxPropagators.jl)).
-- `gs::GS`: Ground station coordinates (geodetic latitude in radians, geodetic lon in radians[, height in meters]).
-
-# Keyword Arguments
-- `transmitter_diameter_m::Number`: Diameter of the transmitting telescope in meters (default 0.6).
-- `receiver_diameter_m::Number`: Diameter of the receiving telescope in meters (default 0.6).
-- `wavelength_nm::Number`: Wavelength in nanometers (default 1550).
-- `time::Union{Number, DateTime}`: Julian time of calculation (defaults to satellite epoch).
-- `conditions::Conditions`: Atmospheric conditions (default clear).
-- `min_θ`: Minimum elevation angle in radians (default 20 degrees).
-
-# Returns
-- `FreespaceChannel` instance or `nothing` if ground station is not visible.
-"""
-function FreespaceChannel(sat::OrbitPropagatorSgp4, gs::GS; transmitter_diameter_m::Num64=60, receiver_diameter_m::Num64=60, wavelength_nm::Num64=1550, time::Union{Number,DateTime,Missing}=missing, conditions::Conditions=clear, min_θ=deg2rad(20))
-    if time === missing
-        time = sat.sgp4d.epoch
-    end
-    if typeof(time) == DateTime
-        time = datetime2julian(time)
-    end
-    gs_height = length(gs) > 2 ? gs[3] : 0
-    sat_sv = Propagators.propagate!(sat, time - sat.sgp4d.epoch, OrbitStateVector)
-    sat_pos = eci_to_ecef(sat_sv.r, time=time)
-    if !is_ground_facility_visible(sat_pos, gs[1], gs[2], gs_height, min_θ)
-        return nothing
-    end
-    gs_height = 0
-    if length(gs) > 2
-        gs_height = gs[3]
-    end
-    n, e, d = SatelliteToolboxTransformations.ecef_to_ned(sat_pos, gs[1], gs[2], gs_height, translate=true)
-    elevation_angle_rad = atan(-d / √(n^2 + e^2))
-    min_altitude_m = d < 0 ? gs_height : √(sat_pos[1]^2 + sat_pos[2]^2 + sat_pos[3]^2)
-    light_condition = light_at_point(sat_sv.r, time)
-    distance_m = norm(geodetic_to_ecef(gs) .- sat_pos)
-    return FreespaceChannel(distance_m, elevation_angle_rad, min_altitude_m, transmitter_diameter_m, receiver_diameter_m, wavelength_nm, conditions, light_condition)
-end
-
-"""
-Create a FreespaceChannel between two satellites.
-
-# Arguments
-- `sat1::OrbitPropagatorSgp4`: Satellite propagator (see [SatelliteToolboxPropagators.jl](https://github.com/JuliaSpace/SatelliteToolboxPropagators.jl)).
-- `sat2::OrbitPropagatorSgp4`: Satellite propagator.
-
-# Keyword Arguments
-- `transmitter_diameter_m::Number`: Diameter of the transmitting telescope in meters (default 0.6).
-- `receiver_diameter_m::Number`: Diameter of the receiving telescope in meters (default 0.6).
-- `wavelength_nm::Number`: Wavelength in nanometers (default 1550).
-- `time::Union{Number, DateTime}`: Julian time of calculation (defaults to satellite epoch).
-- `conditions::Conditions`: Atmospheric conditions (default clear).
-
-# Returns
-- `FreespaceChannel` instance or `nothing` if satellites are not visible to each other.
-"""
-function FreespaceChannel(sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4; transmitter_diameter_m::Num64=60, receiver_diameter_m::Num64=60, wavelength_nm::Num64=1550, time::Union{Number,DateTime,Missing}=missing, conditions::Conditions=clear)
-    if time === missing
-        time = sat.sgp4d.epoch
-    end
-    if typeof(time) == DateTime
-        time = datetime2julian(time)
-    end
-
-    sat1_sv = Propagators.propagate!(sat1, time - sat1.sgp4d.epoch, OrbitStateVector)
-    sat1_pos = eci_to_ecef(sat1_sv.r, time=time)
-
-    sat2_sv = Propagators.propagate!(sat2, time - sat2.sgp4d.epoch, OrbitStateVector)
-    sat2_pos = eci_to_ecef(sat2_sv.r, time=time)
-
-    visibility_check = ellipsoid_line_intersection(semimajor_radius, semiminor_radius, sat1_pos, sat2_pos, only_between=true)
-
-    if length(visibility_check) > 0
-        return nothing
-    end
-
-    min_altitude_m = min(√(sat1_pos[1]^2 + sat1_pos[2]^2 + sat1_pos[3]^2), √(sat2_pos[1]^2 + sat2_pos[2]^2 + sat2_pos[3]^2))
-    # TODO light at worst case of both points
-    light_condition = light_at_point(sat1_sv.r, time)
-
-    distance_m = norm(sat1_pos .- sat2_pos)
-
-    FreespaceChannel(distance_m, 0, min_altitude_m, transmitter_diameter_m, receiver_diameter_m, wavelength_nm, conditions, light_condition)
-end
-
-"""
-Calculate total loss in a freespace channel.
-
-# Arguments
-- `channel::FreespaceChannel`: A freespace channel.
-
-# Returns
-- The probability of a failed transmission through the channel.
-"""
-function total_loss(channel::FreespaceChannel)
-    # L_tot = L_geo + L_atm + L_pnt
-    10^((geometric_loss(channel) + atmospheric_loss(channel) + pointing_loss(channel)) / 20)
-end
-
-# struct Path <: Vector{Union{OrbitPropagatorSgp4,Tuple{Number}}}
-# end
-
-# function path_transmissivity(::Val{:REF}, path::Path)
-#     transmission_probability = 1
-#     # Uplink losses
-#     transmission_probability *= transmissivity(FreespaceChannel(path[2], path[1]))
-#     # Inter-satellite and downlink losses
-#     for i in 3:length(path)-1
-#         transmission_probability *= transmissivity(FreespaceChannel(path[i], path[i+1]))
-#     end
-#     # Reflector losses
-#     transmission_probability *= (1 - decibel_to_probability(reflector_loss()))^(length(path) - 2)
-# end
-
-# function path_transmissivity(::Val{:DD}, path::Path)
-#     transmission_probability = 1
-#     # Dual-downlink channel losses
-#     for i in 1:2:length(path.path)
-#         transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i]))
-#         transmission_probability *= transmissivity(FreespaceChannel(path[i+1], path[i+2]))
-#     end
-#     # Entanglement swapping losses
-#     transmission_probability *= swapping_loss()^((length(path) - 3) / 2)
-# end

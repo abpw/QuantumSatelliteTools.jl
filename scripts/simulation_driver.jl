@@ -1,10 +1,12 @@
 using SatelliteToolboxTle
-using GenerateGroundStations
-using GenerateTLEs
+using QuantumSatelliteTools.GenerateGroundStations
+using QuantumSatelliteTools.GenerateTLEs
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
-using AstronomyGeometry: FreespaceChannel, transmissivity, decibels_to_probability
+using QuantumSatelliteTools.AstronomyGeometry: GS
 using SimpleWeightedGraphs, Graphs
-using LossCalculation: reflector_loss, swapping_loss
+using QuantumSatelliteTools.FreespaceChannelStruct: FreespaceChannel
+using QuantumSatelliteTools.LossCalculation: reflector_loss, swapping_loss, total_loss, decibels_to_probability
+using LinearAlgebra: I
 
 GSES = [
     # North America
@@ -36,18 +38,23 @@ GSES = [
 ]
 
 @enum Entities begin
-    sat
-    gs
-    aux_gs
+    satellite
+    ground_station
+    aux_ground_station
+end
+
+@enum Experiment begin
+    reflector
+    dual_downlink
 end
 
 """
 Helper to add edge data to three edge data arrays.
 
 # Arguments
-- `source::Union{OrbitPropagatorSgp4,Tuple{Float64}}`: A source entity.
-- `destination::Union{OrbitPropagatorSgp4,Tuple{Float64}}`: A destination entity.
-- `node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64}`: A node map of entities to integer values.
+- `source::Union{OrbitPropagatorSgp4{Float64, Float64},GS}`: A source entity.
+- `destination::Union{OrbitPropagatorSgp4{Float64, Float64},GS}`: A destination entity.
+- `node_map::Dict{Union{OrbitPropagatorSgp4{Float64, Float64},GS},Int64}`: A node map of entities to integer values.
 - `time::Float64`: The time of the transmission.
 - `sources::Vector{Int64}`: An array of sources for a graph.
 - `destinations::Vector{Int64}`: An array of destinations for a graph.
@@ -56,18 +63,18 @@ Helper to add edge data to three edge data arrays.
 # Returns
 - nothing
 """
-function edge_data!(source::Union{OrbitPropagatorSgp4,Tuple{Float64}},
-        destination::Union{OrbitPropagatorSgp4,Tuple{Float64}},
-        node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64},
+function edge_data!(source::Union{OrbitPropagatorSgp4{Float64, Float64},GS},
+        destination::Union{OrbitPropagatorSgp4{Float64, Float64},GS},
+        node_map::Dict{Union{OrbitPropagatorSgp4{Float64, Float64},GS},Int64},
         time::Float64,
         sources::Vector{Int64},
         destinations::Vector{Int64},
         weights::Vector{Float64})
-    channel = FreespaceChannel(source, destination, time)
+    channel = FreespaceChannel(source, destination, time=time)
     if !isnothing(channel)
         push!(sources, node_map[source])
         push!(destinations, node_map[destination])
-        push!(weights, transmissivity(channel))
+        push!(weights, total_loss(channel))
     end
 end
 
@@ -78,26 +85,24 @@ Create a graph representing a quatum satellite network at a point in time.
 - `propagators::Vector{OrbitPropagatorSgp4}`: An array of orbit propagators
                                               representing the satellites in
                                               the network.
-- `gses::Vector{Tuple{Float64}}`: An array of tuples holding the coordinates of
+- `gses::Vector{GS}`: An array of tuples holding the coordinates of
                                   the ground stations in the network.
-- `node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64}`:
+- `node_map::Dict{Union{OrbitPropagatorSgp4{Float64, Float64},GS},Int64}`:
                             A map of entities to integer values.
 - `time::Float64`: The time that the graph takes place.
-- `experiment::Union{Val(:REF), Val(:DD)}`: The type of experiment.
-                                            REF - inter-satellite reflectors
-                                            DD - dual-downlink
+- `experiment::Experiment`: The type of experiment.
 
 # Returns
 - SimpleWeightedGraph: A graph representing a quantum satellite network with
-                       nodes of type Union{OrbitPropagatorSgp4,Tuple{Float64}}
+                       nodes of type Union{OrbitPropagatorSgp4{Float64, Float64},GS}
                        representing satellites and ground stations and edges
                        with weights representing channel transmissivity.
 """
-function make_graph(propagators::Vector{OrbitPropagatorSgp4},
-        gses::Vector{Tuple{Float64}},
-        node_map::Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64},
+function make_graph(propagators::Vector{OrbitPropagatorSgp4{Float64, Float64}},
+        gses::Vector{Tuple{T, T}},
+        node_map::Dict{Union{OrbitPropagatorSgp4{Float64, Float64}, GS},Int64},
         time::Float64,
-        experiment::Union{Val(:REF), Val(:DD)})
+        experiment::Experiment) where T <: Number
     sources, destinations, weights =
         Vector{Int64}(), Vector{Int64}(), Vector{Float64}()
     for propagator ∈ propagators
@@ -105,14 +110,14 @@ function make_graph(propagators::Vector{OrbitPropagatorSgp4},
             edge_data!(propagator, gs, node_map, time, sources, destinations, weights)
         end
     end
-    if experiment == Val(:REF)
+    if experiment == reflector
         for i ∈ eachindex(propagators)
             for j ∈ i+1:length(propagators)
                 edge_data!(propagators[i], propagators[j], node_map, time, sources, destinations, weights)
             end
         end
     end
-    SimpleWeightedGraph(sources, destinations, weights)
+    return SimpleWeightedGraph(sources, destinations, weights)
 end
 
 
@@ -122,40 +127,58 @@ Conduct a simulation of a quantum satellite network.
 # Arguments
 - `duration_s::Int64`: The total duration of the simulation in seconds.
 - `interval_s::Int64`: The interval at which the system is sampled in seconds.
-
+- `epoch::Float64`: The time at which the simulation begins.
+- `gses::Vector{GS}`: An array of ground stations (default GSES).
+- `aux_gses::Vector{GS}`: An array of auxiliary groundstations as
+                                      produced by the DD experiment
+                                      (default missing).
+- `experiment::Experiment`: Which experiment to run.
 
 # Returns
-- An aggregate representation of the performance of the system.
+- An aggregate representation of the performance of the system under the
+  architecture dictated by the experiment.
 """
-function simulation_driver(duration_s::Int64, interval_s::Int64,
-        epoch::Float64; gses::Vector{Tuple{Float64}}=GSES,
-        aux_gses::Union{Vector{Tuple{Float64}}, Missing}=missing)
-    # Downloading Starlink TLEs 8.21.2025
+function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
+        experiment::Experiment; gses::Vector{Tuple{T, T}},
+        aux_gses::Union{Vector{Tuple{T, T}}, Missing}=missing) where T <: Number
+    # Downloaded Starlink TLEs 8.21.2025
     tles = read_tles_from_file(joinpath(@__DIR__, "../databases/starlink.tle"))
     propagators = [Propagators.init(Val(:SGP4), tle) for tle ∈ tles]
     aux_gses = ismissing(aux_gses) ? [] : aux_gses
 
     # Map entity to an integer index
-    node_map = Dict{Union{OrbitPropagatorSgp4,Tuple{Float64}},Int64}(
+    node_map = Dict{Union{OrbitPropagatorSgp4{Float64, Float64},GS},Int64}(
         node => index for (index, node) ∈ enumerate(vcat(propagators, gses, aux_gses)))
 
     # Map integer index of entity to entity type
     types = Dict{Int64, Entities}(
-        node_map[propagator] => sat for propagator ∈ propagators)
+        node_map[propagator] => satellite for propagator ∈ propagators)
     merge!(types, Dict{Int64, Entities}(
-        node_map[gs] => gs for gs ∈ gses))
+        node_map[gs] => ground_station for gs ∈ gses))
     merge!(types, Dict{Int64, Entities}(
-        node_map[aux_gs] => aux_gs for aux_gs ∈ aux_gses))
+        node_map[aux_gs] => aux_ground_station for aux_gs ∈ aux_gses))
 
-    # Perform experiments
-    for experiment ∈ [Val(:REF), Val(:DD)]
-        for time_elapsed ∈ 0:interval_s:duration_s-1
-            make_graph(propagators, gses, node_map, epoch+time_elapsed, experiment)
-        end
+    # Perform simulation
+    total_prob = 0
+    for time_elapsed ∈ 0:interval_s:duration_s-1
+        total_prob += all_pairs_path_probs(
+            make_graph(propagators, gses, node_map, epoch+time_elapsed, experiment),
+            types,
+            experiment)
     end
+    return total_prob / (duration_s ÷ interval_s)
 end
 
-function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Union{Val{:DD}, Val{:REF}})
+function simulation_driver()
+    # Perform experiments
+    total_probs = Dict{}
+    for experiment ∈ [Val(:REF), Val(:DD)]
+        simulate
+    end
+
+end
+
+function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Experiment)
     path_probs = zeros(nv(g), nv(g)) + I
     for edge ∈ edges(g)
         source = min(src(edge), dst(edge))
@@ -163,31 +186,31 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
         path_probs[source, destination] = g.weights[source, destination]
     end
     for k ∈ 1:nv(g)
-        if experiment == Val(:REF)
-            if types[k] != sat
+        if experiment == reflector
+            if types[k] != satellite
                 continue
             end
             node_cost = decibel_to_probability(reflector_loss())
         else
-            node_cost = types[k] == sat ? 1 : swapping_loss()
+            node_cost = types[k] == satellite ? 1 : swapping_loss()
         end
         for i ∈ 1:nv(g)
             if i == k
                 continue
             end
-            if experiment == Val(:DD) && !xor(types[k] == sat, types[i] == sat)
+            if experiment == dual_downlink && !xor(types[k] == satellite, types[i] == satellite)
                 continue
             end
             for j ∈ i+1:nv(g)
                 if j == k
                     continue
                 end
-                if experiment == Val(:DD) && !xor(types[k] == sat, types[j] == sat)
+                if experiment == dual_downlink && !xor(types[k] == satellite, types[j] == satellite)
                     continue
                 end
                 path_probs[i, j] = min(path_probs[i, j], path_probs[i, k] * path_probs[k, j] * node_cost)
             end
         end
     end
-    return sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == gs for j ∈ i+1:nv(g) if types[j] == gs])
+    return sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station])
 end
