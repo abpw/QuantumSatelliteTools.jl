@@ -221,7 +221,7 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
                 if experiment == dual_downlink && !xor(types[k] == satellite, types[j] == satellite)
                     continue
                 end
-                path_probs[i, j] = max(path_probs[i, j], path_probs[i, k] * path_probs[k, j] * node_cost)
+                path_probs[i, j] = max(path_probs[i, j], path_probs[min(i, k), max(i, k)] * path_probs[min(k, j), max(k, j)] * node_cost)
             end
         end
     end
