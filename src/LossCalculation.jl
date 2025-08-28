@@ -1,4 +1,4 @@
-using ..FreespaceChannelStruct: FreespaceChannel
+using ..FreespaceChannels: FreespaceChannel
 
 """
 Calculate the beam waist radius for a channel.
@@ -24,7 +24,7 @@ Convert a loss value from decibels to probability.
 - The loss as a probability (0 - 1).
 """
 function decibels_to_probability(loss_dB::Number)
-    10^(loss_dB / 20)
+    10^(loss_dB / -10)
 end
 
 """
@@ -34,10 +34,10 @@ Calculate the geometric loss for a channel.
 - `channel::FreespaceChannel`: A freespace channel.
 
 # Returns
-- The total geometric loss in decibels.
+- The total geometric loss.
 """
 function geometric_loss_dB(channel::FreespaceChannel)
-    20 * log10((channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) / channel.receiver_diameter_m)
+    20*log10(channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) / channel.receiver_diameter_m
 end
 
 """
@@ -68,7 +68,7 @@ Calculate the atmospheric loss for a channel.
 - `channel::FreespaceChannel`: A freespace channel.
 
 # Returns
-- The total atmospheric loss in decibels.
+- The total atmospheric loss.
 """
 function atmospheric_loss_dB(channel::FreespaceChannel)
     atmospheric_distance = atmosphere_distance(channel)
@@ -85,7 +85,7 @@ function atmospheric_loss_dB(channel::FreespaceChannel)
         throw("Molecular absorption is not defined for other wavelengths")
     end
 
-    transmittance_loss = molecular_absorption * (atmospheric_distance / 1000)
+    return molecular_absorption * (atmospheric_distance / 1000)
 
     # Weather loss - to be finished later
     # if channel.conditions == fog
@@ -117,7 +117,7 @@ Calculate the pointing loss for a channel.
 - `pointing_jitter::Number`: The pointing jitter in microradians (default 5).
 
 # Returns
-- The total pointing loss in decibels.
+- The total pointing loss.
 """
 function pointing_loss_dB(channel::FreespaceChannel, pointing_jitter::Float64=5.0)
     # L_PNT = exp(-8Θ²ⱼ/w²₀)
@@ -132,7 +132,7 @@ Calculate the reflector loss for a satellite.
 - The reflector loss for one satellite in decibels.
 """
 function reflector_loss()
-    5.854678746311231
+    decibels_to_probability(5.854678746311231)
 end
 
 """
@@ -161,5 +161,8 @@ Calculate total loss in a freespace channel.
 """
 function total_loss(channel::FreespaceChannel)
     # L_tot = L_geo + L_atm + L_pnt
-    10^((geometric_loss_dB(channel) + atmospheric_loss_dB(channel) + pointing_loss_dB(channel)) / 20)
+    g = geometric_loss_dB(channel)
+    a = atmospheric_loss_dB(channel)
+    p = pointing_loss_dB(channel)
+    return decibels_to_probability(g + a + p)
 end

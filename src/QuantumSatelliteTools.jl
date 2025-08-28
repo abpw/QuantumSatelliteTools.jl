@@ -5,7 +5,7 @@ using SatelliteToolboxTle, SatelliteToolboxPropagators, SatelliteToolboxTransfor
 using SatelliteAnalysis
 using Downloads, CSV, Random, Dates, StaticArrays
 
-export AstronomyGeometry, GenerateGroundStations, GenerateTLEs, FreespaceChannelStruct, LossCalculation
+export AstronomyGeometry, GenerateGroundStations, GenerateTLEs, FreespaceChannels, LossCalculation
 
 module AstronomyGeometry
 export semimajor_radius, semiminor_radius, G, earth_mass_kg, seconds_per_day, equatorial_circumference_km, sin_60
@@ -29,9 +29,9 @@ export refresh_satcat, update_starlink_tles, save_TLEs, get_active_satellite_TLE
 include("GenerateTLEs.jl")
 end
 
-module FreespaceChannelStruct
+module FreespaceChannels
 export FreespaceChannel
-include("FreespaceChannelStruct.jl")
+include("FreespaceChannels.jl")
 end
 
 module LossCalculation

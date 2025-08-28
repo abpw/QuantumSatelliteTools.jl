@@ -4,7 +4,7 @@ using QuantumSatelliteTools.GenerateTLEs
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
 using QuantumSatelliteTools.AstronomyGeometry: GS
 using SimpleWeightedGraphs, Graphs
-using QuantumSatelliteTools.FreespaceChannelStruct: FreespaceChannel
+using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 using QuantumSatelliteTools.LossCalculation: reflector_loss, swapping_loss, total_loss, decibels_to_probability
 using LinearAlgebra: I
 
@@ -74,7 +74,7 @@ function edge_data!(source::Union{OrbitPropagatorSgp4{Float64, Float64},GS},
     if !isnothing(channel)
         push!(sources, node_map[source])
         push!(destinations, node_map[destination])
-        push!(weights, total_loss(channel))
+        push!(weights, 1-total_loss(channel))
     end
 end
 
@@ -142,15 +142,18 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
         experiment::Experiment; gses::Vector{Tuple{T, T}},
         aux_gses::Union{Vector{Tuple{T, T}}, Missing}=missing) where T <: Number
     # Downloaded Starlink TLEs 8.21.2025
+    println("Getting TLEs")
     tles = read_tles_from_file(joinpath(@__DIR__, "../databases/starlink.tle"))
     propagators = [Propagators.init(Val(:SGP4), tle) for tle ∈ tles]
     aux_gses = ismissing(aux_gses) ? [] : aux_gses
 
     # Map entity to an integer index
+    println("Mapping nodes to integers")
     node_map = Dict{Union{OrbitPropagatorSgp4{Float64, Float64},GS},Int64}(
         node => index for (index, node) ∈ enumerate(vcat(propagators, gses, aux_gses)))
 
     # Map integer index of entity to entity type
+    println("Mapping node integer values to types")
     types = Dict{Int64, Entities}(
         node_map[propagator] => satellite for propagator ∈ propagators)
     merge!(types, Dict{Int64, Entities}(
@@ -160,13 +163,20 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
 
     # Perform simulation
     total_prob = 0
+    println("Beginning simulation")
     for time_elapsed ∈ 0:interval_s:duration_s-1
-        total_prob += all_pairs_path_probs(
-            make_graph(propagators, gses, node_map, epoch+time_elapsed, experiment),
+        println("    Time elapsed: $(time_elapsed)")
+        graph = make_graph(propagators, gses, node_map, epoch+time_elapsed, experiment)
+        curr_prob = all_pairs_path_probs(
+            graph,
             types,
             experiment)
+        println("    Total path probability at interval: $(curr_prob)")
+        total_prob += curr_prob
     end
-    return total_prob / (duration_s ÷ interval_s)
+    experiment_prob = total_prob / (duration_s ÷ interval_s)
+    println("Total probability over experiment: $(experiment_prob)")
+    return experiment_prob
 end
 
 function simulation_driver()
@@ -181,18 +191,21 @@ end
 function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Experiment)
     path_probs = zeros(nv(g), nv(g)) + I
     for edge ∈ edges(g)
-        source = min(src(edge), dst(edge))
-        destination = max(src(edge), dst(edge))
-        path_probs[source, destination] = g.weights[source, destination]
+        # source = min(src(edge), dst(edge))
+        # destination = max(src(edge), dst(edge))
+        path_probs[src(edge), dst(edge)] = path_probs[dst(edge), src(edge)] = g.weights[src(edge), dst(edge)]
+        # path_probs[source, destination] = g.weights[source, destination]
+        # print(path_probs[source, destination])
     end
+    # print([prob for prob in path_probs if prob != 0.0])
     for k ∈ 1:nv(g)
         if experiment == reflector
             if types[k] != satellite
                 continue
             end
-            node_cost = decibel_to_probability(reflector_loss())
+            node_cost = 1 - reflector_loss()
         else
-            node_cost = types[k] == satellite ? 1 : swapping_loss()
+            node_cost = types[k] == satellite ? 1 : 1 - swapping_loss()
         end
         for i ∈ 1:nv(g)
             if i == k
@@ -208,9 +221,10 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
                 if experiment == dual_downlink && !xor(types[k] == satellite, types[j] == satellite)
                     continue
                 end
-                path_probs[i, j] = min(path_probs[i, j], path_probs[i, k] * path_probs[k, j] * node_cost)
+                path_probs[i, j] = max(path_probs[i, j], path_probs[i, k] * path_probs[k, j] * node_cost)
             end
         end
     end
-    return sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station])
+    s = sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station])
+    return s
 end
