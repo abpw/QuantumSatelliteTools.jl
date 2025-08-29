@@ -1,19 +1,19 @@
 ```@meta
-CurrentModule = QuantumSatelliteTools.AstronomyGeometry
+CurrentModule = QuantumSatelliteTools
 ```
 
 # AstronomyGeometry
 
-The **AstronomyGeometry** namespace within the [**QuantumSatelliteTools.jl**](index.html) provides functionality for converting between coordinate systems and computing visibility and distance between objects described by those coordinate systems.
+The **AstronomyGeometry** namespace within the [**QuantumSatelliteTools.jl**](index.md) provides functionality for converting between coordinate systems and computing visibility and distance between objects described by those coordinate systems.
 
 ## Getting Started
 
-Add the [**QuantumSatelliteTools.jl**](index.html) package using Julia's package manager:
+Add the [**QuantumSatelliteTools.jl**](index.md) package using Julia's package manager:
 ```julia
 ] add QuantumSatelliteTools
 ```
 
-Import it in your Julia environment:
+Import the **AstronomyGeometry** namespace into your Julia environment:
 ```julia
 using QuantumSatelliteTools.AstronomyGeometry
 ```

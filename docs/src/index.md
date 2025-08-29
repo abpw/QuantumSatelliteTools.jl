@@ -23,22 +23,9 @@ Add the package using Julia's package manager:
 
 **QuantumSatelliteTools.jl** contains several namespaces that each provide their own functionality. See their documentation linked below on use.
 
-## Documentation Structure
-
-- [`QuantumSatelliteTools`](@ref): Main module documentation
-- Tutorials and usage examples (coming soon)
-- API reference (generated automatically below)
-
 ## Index
 
 ```@index
 Pages   = ["AstronomyGeometry.md", "GenerateGroundStations.md", "GenerateTLEs.md", "FreespaceChannels.md", "LossCalculation.md"]
 Modules = []
-```
-
-## API Documentation
-
-```@autodocs
-Modules = [QuantumSatelliteTools.AstronomyGeometry, QuantumSatelliteTools.GenerateTLEs, QuantumSatelliteTools.GenerateGroundStations]
-Order   = [:type, :function]
 ```
