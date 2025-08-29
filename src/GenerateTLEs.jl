@@ -29,9 +29,11 @@ function update_starlink_tles(;verbose::Bool=false)
     existing_IDs = []
     if isfile(starlink_TLE_file_path)
         existing_TLEs = SatelliteToolboxTle.read_tles_from_file(starlink_TLE_file_path)
+        if verbose
+            println("Using $(length(existing_TLEs)) existing TLEs")
         existing_IDs = [tle.satellite_number for tle in existing_TLEs]
     end
-    save_TLEs(get_active_satellite_TLEs(OBJECT_NAME="starlink", row_filter=row->!(parse(Int, row.NORAD_CAT_ID)∈existing_IDs), verbose=verbose), starlink_TLE_file_path)
+    save_TLEs(append!(existing_TLEs, get_active_satellite_TLEs(OBJECT_NAME="starlink", row_filter=row->!(parse(Int, row.NORAD_CAT_ID)∈existing_IDs), verbose=verbose)), starlink_TLE_file_path)
 end
 
 """
