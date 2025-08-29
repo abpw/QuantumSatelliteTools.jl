@@ -1,0 +1,4 @@
+name = "GroundStationGenerator"
+uuid = "b7ddcb89-9837-40d3-8bb4-8bc26c7e2c27"
+authors = ["alexgbarlow <alexbarlow@umass.edu>"]
+version = "0.1.0"

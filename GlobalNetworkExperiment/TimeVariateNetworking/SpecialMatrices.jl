@@ -1,4 +1,3 @@
-
 using IntervalSets
 include("SemiRingOfLifetimes.jl")
 

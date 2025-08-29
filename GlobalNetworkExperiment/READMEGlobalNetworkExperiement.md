@@ -30,20 +30,6 @@ Synopsis:
 
 What Needs to be Done:
 - We need to see Albert's timeline to decide whether the driver will be in Julia or Python, prefering Julia as it is quicker.
-- I'm Currently looking into finding strategies to place the extra  GS's
+- I'm currently looking into finding strategies to place the extra  GS's
 - We need a fast marker to add to City lists so that we know which tuples in the ModifiableCitiesList.jl are actual cities and which are "anonymous" GS's. I think we should use a Set to store cities in at the begining of the Driver file since Cities will be an command line arg, then use the fact that Set look up is O(1)
 - TESTING AND DEBUGGING! I haven't really tested much of this code, and I think that if it works for our Cities.jl list, its good enough, but I think it might be worth our time to go through and debug a little
-
-
-
-
-
-
-
-
-
-
-
-What Needs to be Done:
-
-
