@@ -17,7 +17,7 @@ end
 """
 Update the stored Starlink TLEs by querying Celestrak for new entries.
     Minimizes calls to Celestrak by only querying for Starlink satellites
-    that are listed in satcat.csv as active but do not appear in the 
+    that are listed in satcat.csv as active but do not appear in the
     local Starlink TLE database.
 
 TODO: remove inactive satellites
@@ -34,7 +34,7 @@ function update_starlink_tles(;verbose::Bool=false)
         end
         existing_IDs = [tle.satellite_number for tle in existing_TLEs]
     end
-    save_TLEs(append!(existing_TLEs, get_active_satellite_TLEs(OBJECT_NAME="starlink", row_filter=row->!(parse(Int, row.NORAD_CAT_ID)∈existing_IDs), verbose=verbose)), starlink_TLE_file_path)
+    save_TLEs(get_active_satellite_TLEs(OBJECT_NAME="starlink", row_filter=row->!(parse(Int, row.NORAD_CAT_ID)∈existing_IDs), verbose=verbose), starlink_TLE_file_path)
 end
 
 """
