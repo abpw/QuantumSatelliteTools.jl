@@ -7,35 +7,39 @@ using SimpleWeightedGraphs, Graphs
 using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 using QuantumSatelliteTools.LossCalculation: reflector_loss, swapping_loss, total_loss, decibels_to_probability
 using LinearAlgebra: I
+using QuantumSatelliteTools.GenerateGroundStations: generate_population_center_gses
+using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
+using ProgressBars: ProgressBar
 
-GSES = [
-    # North America
-    (40.7128, -74.0060),   # New York City, USA (1)
-    (34.0522, -118.2437),  # Los Angeles, USA (2)
-    (19.4326, -99.1332),  # Mexico City, Mexico (3)
-    (49.2827, -123.1207),  # Vancouver, Canada
-    # South America
-    (-23.5505, -46.6333),  # São Paulo, Brazil
-    (-34.6037, -58.3816),  # Buenos Aires, Argentina
-    (4.7110, -74.0721),  # Bogotá, Colombia
-    # Europe
-    (51.5074, -0.1278),   # London, UK
-    (48.8566, 2.3522),   # Paris, France
-    (52.5200, 13.4050),   # Berlin, Germany
-    (41.0082, 28.9784),   # Istanbul, Türkiye
-    # Africa
-    (6.5244, 3.3792),   # Lagos, Nigeria
-    (30.0444, 31.2357),   # Cairo, Egypt
-    (-26.2041, 28.0473),   # Johannesburg, South Africa
-    # Asia
-    (39.9042, 116.4074),   # Beijing, China
-    (35.6895, 139.6917),   # Tokyo, Japan
-    (19.0760, 72.8777),   # Mumbai, India
-    (-6.2088, 106.8456),   # Jakarta, Indonesia
-    # Oceania
-    (-33.8688, 151.2093),  # Sydney, Australia
-    (-36.8485, 174.7633)   # Auckland, New Zealand
-]
+# GSES = [
+#     # North America
+#     (40.7128, -74.0060),   # New York City, USA (1)
+#     (40.7000, -74.0000),   # New York City, USA (1)
+#     (34.0522, -118.2437),  # Los Angeles, USA (2)
+#     (19.4326, -99.1332),  # Mexico City, Mexico (3)
+#     (49.2827, -123.1207),  # Vancouver, Canada
+#     # South America
+#     (-23.5505, -46.6333),  # São Paulo, Brazil
+#     (-34.6037, -58.3816),  # Buenos Aires, Argentina
+#     (4.7110, -74.0721),  # Bogotá, Colombia
+#     # Europe
+#     (51.5074, -0.1278),   # London, UK
+#     (48.8566, 2.3522),   # Paris, France
+#     (52.5200, 13.4050),   # Berlin, Germany
+#     (41.0082, 28.9784),   # Istanbul, Türkiye
+#     # Africa
+#     (6.5244, 3.3792),   # Lagos, Nigeria
+#     (30.0444, 31.2357),   # Cairo, Egypt
+#     (-26.2041, 28.0473),   # Johannesburg, South Africa
+#     # Asia
+#     (39.9042, 116.4074),   # Beijing, China
+#     (35.6895, 139.6917),   # Tokyo, Japan
+#     (19.0760, 72.8777),   # Mumbai, India
+#     (-6.2088, 106.8456),   # Jakarta, Indonesia
+#     # Oceania
+#     (-33.8688, 151.2093),  # Sydney, Australia
+#     (-36.8485, 174.7633)   # Auckland, New Zealand
+# ]
 
 @enum Entities begin
     satellite
@@ -139,14 +143,14 @@ Conduct a simulation of a quantum satellite network.
   architecture dictated by the experiment.
 """
 function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
-        experiment::Experiment; gses::Vector{Tuple{T, T}},
+        experiment::Experiment; gses::Union{Vector{Tuple{T, T}}, Missing}=missing,
         aux_gses::Union{Vector{Tuple{T, T}}, Missing}=missing) where T <: Number
     # Downloaded Starlink TLEs 8.21.2025
-    println("Getting TLEs")
-    tles = read_tles_from_file(joinpath(@__DIR__, "../databases/starlink.tle"))
+    println("Generating TLEs")
+    tles::Vector{TLE} = [tle for θ ∈ 0.0:18.0:180.0 for tle ∈ generate_regular_array_TLEs(orbits=10, sats_per_orbit=10, inclination_rad=θ)]
     propagators = [Propagators.init(Val(:SGP4), tle) for tle ∈ tles]
+    gses::Vector{Tuple{Number, Number}} = ismissing(gses) ? generate_population_center_gses(100) : gses
     aux_gses = ismissing(aux_gses) ? [] : aux_gses
-
     # Map entity to an integer index
     println("Mapping nodes to integers")
     node_map = Dict{Union{OrbitPropagatorSgp4{Float64, Float64},GS},Int64}(
@@ -163,14 +167,16 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
 
     # Perform simulation
     total_prob = 0
+    num_gses = length(gses)
+    num_gs_pairs = num_gses*(num_gses-1)/2
     println("Beginning simulation")
-    for time_elapsed ∈ 0:interval_s:duration_s-1
-        println("    Time elapsed: $(time_elapsed)")
+    for time_elapsed ∈ ProgressBar(0:interval_s:duration_s-1)
+        println("    Time interval: $(time_elapsed)")
         graph = make_graph(propagators, gses, node_map, epoch+time_elapsed, experiment)
         curr_prob = all_pairs_path_probs(
             graph,
             types,
-            experiment)
+            experiment) / num_gs_pairs
         println("    Total path probability at interval: $(curr_prob)")
         total_prob += curr_prob
     end
@@ -191,14 +197,11 @@ end
 function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Experiment)
     path_probs = zeros(nv(g), nv(g)) + I
     for edge ∈ edges(g)
-        # source = min(src(edge), dst(edge))
-        # destination = max(src(edge), dst(edge))
-        path_probs[src(edge), dst(edge)] = path_probs[dst(edge), src(edge)] = g.weights[src(edge), dst(edge)]
-        # path_probs[source, destination] = g.weights[source, destination]
-        # print(path_probs[source, destination])
+        source = min(src(edge), dst(edge))
+        destination = max(src(edge), dst(edge))
+        path_probs[source, destination] = g.weights[source, destination]
     end
-    # print([prob for prob in path_probs if prob != 0.0])
-    for k ∈ 1:nv(g)
+    for k ∈ ProgressBar(1:nv(g))
         if experiment == reflector
             if types[k] != satellite
                 continue
@@ -225,6 +228,5 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
             end
         end
     end
-    s = sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station])
-    return s
+    return sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station])
 end
