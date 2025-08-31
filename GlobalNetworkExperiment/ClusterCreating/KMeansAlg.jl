@@ -49,7 +49,7 @@ Returns a NamedTuple:
 - `clusters::Vector{Vector{NTuple{2,Float64}}}` : `k` buckets of cities by assignment
 - `head_coords::Vector{NTuple{2,Float64}}`     : the heads you passed in (fixed)
 - `head_indices_in_cities::Vector{Union{Int,Missing}}` : index of each head in `Cities` if found
-- `distances_km::Matrix{Float64}`      : `k×n` matrix of head→city distances in **km**
+- `distances_km::Matrix{Float64}`      : `kxn` matrix of head→city distances in **km**
 """
 function clustering_fixed_heads(Cities::Vector{NTuple{2,Float64}}, cluster_heads::Vector{NTuple{2,Float64}}; earth_radius_m::Float64=DEFAULT_EARTH_RADIUS_M)
     Crad = _to_rad_matrix(Cities)        
@@ -89,6 +89,6 @@ Just the clustered city buckets (one vector per head), with heads fixed.
 """
 function cluster_cities_fixed_heads(Cities::Vector{NTuple{2,Float64}}, cluster_heads::Vector{NTuple{2,Float64}}; earth_radius_m::Float64 = DEFAULT_EARTH_RADIUS_M
 )
-    result = clustering_fixed_heads(Cities, cluster_heads; earth_radius_m)
+    result = clustering_fixed_heads(Cities, cluster_heads; earth_radius_m=earth_radius_m)
     return result.clusters
 end

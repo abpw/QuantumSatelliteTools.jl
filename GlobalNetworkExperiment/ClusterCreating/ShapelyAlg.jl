@@ -5,7 +5,7 @@ include(raw"C:\\Users\\alexb\\ProgrammingProjects\\URV2025\\QSATJulia\\QuantumSa
 
 dist_km(city1, city2) = dist(city1, city2) / 1000.0
 
-function shapelyAlg(Cities::Vector{NTuple{2,Float64}}, alpha::Float64 = 0.98)
+function shapelyAlg(Cities::Vector{NTuple{2,Float64}}, alpha::Float64 = 0.5)
     n = length(Cities)
     n == 0 && return NTuple{2,Float64}[]
     Phi = Vector{Float64}(undef, n)

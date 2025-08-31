@@ -6,18 +6,19 @@ include(raw"C:\\Users\\alexb\\ProgrammingProjects\\URV2025\\QSATJulia\\QuantumSa
 dist_km(city1, city2) = dist(city1, city2) / 1000.0
 MAX_DIST_KM = 450.0
 
-function objective_function(dist::Float64, Cities::Vector{NTuple{2,Float64}}) 
-    return 1- dist/(1+graph_diameter_km(Cities).diameter_km)
+function objective_function(dist::Float64, Cities::Vector{NTuple{2,Float64}}, GS_dist:: Float64 = MAX_DIST_KM) 
+    return 1-(dist/2718.381)
+    # return 1- dist/(1+graph_diameter_km(Cities, GS_dist).diameter_km)
 end
 
 
 # --- weighted adjacency: neighbors with edge length in km ---
-function build_weighted_adjacency(coords::Vector{NTuple{2,Float64}})
+function build_weighted_adjacency(coords::Vector{NTuple{2,Float64}}, dist:: Float64=MAX_DIST_KM)
     n = length(coords)
     adjMat = [Vector{Tuple{Int,Float64}}() for _ in 1:n]
     for i in 1:n-1, j in i+1:n
         dkm = dist_km(coords[i], coords[j])
-        if dkm <= MAX_DIST_KM
+        if dkm <= dist
             push!(adjMat[i], (j, dkm))
             push!(adjMat[j], (i, dkm))
         end
@@ -51,8 +52,8 @@ function dijkstra(adjw::Vector{Vector{Tuple{Int,Float64}}}, s::Int)
     return dist
 end
 
-function graph_diameter_km(coords::Vector{NTuple{2,Float64}})
-    adjw = build_weighted_adjacency(coords)
+function graph_diameter_km(coords::Vector{NTuple{2,Float64}}, GS_dist:: Float64 = MAX_DIST_KM)
+    adjw = build_weighted_adjacency(coords, GS_dist)
     n = length(adjw)
 
     best_d_km = 0.0
