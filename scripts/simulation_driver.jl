@@ -11,36 +11,6 @@ using QuantumSatelliteTools.GenerateGroundStations: generate_population_center_g
 using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
 using ProgressBars: ProgressBar
 
-# GSES = [
-#     # North America
-#     (40.7128, -74.0060),   # New York City, USA (1)
-#     (40.7000, -74.0000),   # New York City, USA (1)
-#     (34.0522, -118.2437),  # Los Angeles, USA (2)
-#     (19.4326, -99.1332),  # Mexico City, Mexico (3)
-#     (49.2827, -123.1207),  # Vancouver, Canada
-#     # South America
-#     (-23.5505, -46.6333),  # São Paulo, Brazil
-#     (-34.6037, -58.3816),  # Buenos Aires, Argentina
-#     (4.7110, -74.0721),  # Bogotá, Colombia
-#     # Europe
-#     (51.5074, -0.1278),   # London, UK
-#     (48.8566, 2.3522),   # Paris, France
-#     (52.5200, 13.4050),   # Berlin, Germany
-#     (41.0082, 28.9784),   # Istanbul, Türkiye
-#     # Africa
-#     (6.5244, 3.3792),   # Lagos, Nigeria
-#     (30.0444, 31.2357),   # Cairo, Egypt
-#     (-26.2041, 28.0473),   # Johannesburg, South Africa
-#     # Asia
-#     (39.9042, 116.4074),   # Beijing, China
-#     (35.6895, 139.6917),   # Tokyo, Japan
-#     (19.0760, 72.8777),   # Mumbai, India
-#     (-6.2088, 106.8456),   # Jakarta, Indonesia
-#     # Oceania
-#     (-33.8688, 151.2093),  # Sydney, Australia
-#     (-36.8485, 174.7633)   # Auckland, New Zealand
-# ]
-
 @enum Entities begin
     satellite
     ground_station
@@ -137,25 +107,28 @@ Conduct a simulation of a quantum satellite network.
                                       produced by the DD experiment
                                       (default missing).
 - `experiment::Experiment`: Which experiment to run.
+- `num_sats::Int64`: The number of satellites per orbit.
 
 # Returns
 - An aggregate representation of the performance of the system under the
   architecture dictated by the experiment.
 """
 function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
-        experiment::Experiment; gses::Union{Vector{Tuple{T, T}}, Missing}=missing,
-        aux_gses::Union{Vector{Tuple{T, T}}, Missing}=missing) where T <: Number
+        experiment::Experiment, num_sats::Int64;
+        gses::Union{Vector{Tuple{T, T}}, Missing}=missing,
+        aux_gses::Union{Vector{Tuple{T, T}}, Missing}=missing,
+        out_file::Union{String, Missing}=missing) where T <: Number
     # Downloaded Starlink TLEs 8.21.2025
     println("Generating TLEs")
-    tles::Vector{TLE} = [tle for θ ∈ 0.0:18.0:180.0 for tle ∈ generate_regular_array_TLEs(orbits=10, sats_per_orbit=10, inclination_rad=θ)]
+    tles::Vector{TLE} = [tle for θ ∈ 0.0:18.0:162.0 for tle ∈ generate_regular_array_TLEs(orbits=10, sats_per_orbit=num_sats, inclination_rad=θ)]
     propagators = [Propagators.init(Val(:SGP4), tle) for tle ∈ tles]
     gses::Vector{Tuple{Number, Number}} = ismissing(gses) ? generate_population_center_gses(100) : gses
-    aux_gses = ismissing(aux_gses) ? [] : aux_gses
+    aux_gses::Vector{Tuple{Number, Number}} = ismissing(aux_gses) ? [] : aux_gses
+
     # Map entity to an integer index
     println("Mapping nodes to integers")
     node_map = Dict{Union{OrbitPropagatorSgp4{Float64, Float64},GS},Int64}(
         node => index for (index, node) ∈ enumerate(vcat(propagators, gses, aux_gses)))
-
     # Map integer index of entity to entity type
     println("Mapping node integer values to types")
     types = Dict{Int64, Entities}(
@@ -164,24 +137,37 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
         node_map[gs] => ground_station for gs ∈ gses))
     merge!(types, Dict{Int64, Entities}(
         node_map[aux_gs] => aux_ground_station for aux_gs ∈ aux_gses))
-
+    # println(length(Dict(key => val for (key, val) in types if val == satellite)))
+    # println(length(Dict(key => val for (key, val) in types if val == ground_station)))
+    # println(length(Dict(key => val for (key, val) in types if val == aux_ground_station)))
     # Perform simulation
     total_prob = 0
+    transmissivities::Vector{Tuple{Float64, Float64}} = []
     num_gses = length(gses)
     num_gs_pairs = num_gses*(num_gses-1)/2
     println("Beginning simulation")
     for time_elapsed ∈ ProgressBar(0:interval_s:duration_s-1)
         println("    Time interval: $(time_elapsed)")
-        graph = make_graph(propagators, gses, node_map, epoch+time_elapsed, experiment)
+        graph = make_graph(propagators, vcat(gses, aux_gses), node_map, epoch+time_elapsed, experiment)
         curr_prob = all_pairs_path_probs(
             graph,
             types,
             experiment) / num_gs_pairs
         println("    Total path probability at interval: $(curr_prob)")
+        if !ismissing(out_file)
+            push!(transmissivities, (time_elapsed, curr_prob))
+        end
         total_prob += curr_prob
     end
     experiment_prob = total_prob / (duration_s ÷ interval_s)
     println("Total probability over experiment: $(experiment_prob)")
+    if !ismissing(out_file)
+        open(pwd()*"/data/"*out_file, "w") do file
+            for transmissivity in transmissivities
+                write(file, "$(transmissivity[1]),$(transmissivity[2])\n")
+            end
+        end
+    end
     return experiment_prob
 end
 
@@ -228,5 +214,6 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
             end
         end
     end
-    return sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station])
+    arr = [path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station]
+    return sum(arr)
 end
