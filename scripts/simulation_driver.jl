@@ -197,9 +197,7 @@ end
 function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Experiment)
     path_probs = zeros(nv(g), nv(g)) + I
     for edge ∈ edges(g)
-        source = min(src(edge), dst(edge))
-        destination = max(src(edge), dst(edge))
-        path_probs[source, destination] = g.weights[source, destination]
+        path_probs[src(edge), dst(edge)] = path_probs[dst(edge), src(edge)] = g.weights[src(edge), dst(edge)]
     end
     for k ∈ ProgressBar(1:nv(g))
         if experiment == reflector
@@ -217,8 +215,8 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
             if experiment == dual_downlink && !xor(types[k] == satellite, types[i] == satellite)
                 continue
             end
-            for j ∈ i+1:nv(g)
-                if j == k
+            for j ∈ 1:nv(g)
+                if j == k || j == i
                     continue
                 end
                 if experiment == dual_downlink && !xor(types[k] == satellite, types[j] == satellite)
@@ -228,5 +226,5 @@ function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entitie
             end
         end
     end
-    return sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station])
+    return sum([path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ vertices(g) if types[j] == ground_station && i != j])/2
 end
