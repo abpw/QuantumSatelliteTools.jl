@@ -3,13 +3,16 @@ using QuantumSatelliteTools.GenerateGroundStations
 using QuantumSatelliteTools.GenerateTLEs
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
 using QuantumSatelliteTools.AstronomyGeometry: GS
-using SimpleWeightedGraphs, Graphs
+using SimpleWeightedGraphs: SimpleWeightedGraph, get_weight
+using Graphs: neighbors, vertices, nv, edges, src, dst
 using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 using QuantumSatelliteTools.LossCalculation: reflector_loss, swapping_loss, total_loss, decibels_to_probability
 using LinearAlgebra: I
 using QuantumSatelliteTools.GenerateGroundStations: generate_population_center_gses
 using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
 using ProgressBars: ProgressBar
+using DataStructures: PriorityQueue, enqueue!, dequeue!
+using Base: summarysize
 
 @enum Entities begin
     satellite
@@ -20,6 +23,21 @@ end
 @enum Experiment begin
     reflector
     dual_downlink
+end
+
+struct Path
+    nodes::Vector{Int64}
+    transmissivity::Float64
+end
+
+struct PathProbs
+    num_nodes::Int64
+    transmissivity::Float64
+end
+
+mutable struct HopProb
+    count::Int64
+    sum_transmissivity::Float64
 end
 
 """
@@ -117,7 +135,10 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
         experiment::Experiment, num_sats::Int64;
         gses::Union{Vector{Tuple{T, T}}, Missing}=missing,
         aux_gses::Union{Vector{Tuple{T, T}}, Missing}=missing,
-        out_file::Union{String, Missing}=missing) where T <: Number
+        time_file::Union{String, Missing}=missing,
+        hop_file::Union{String, Missing}=missing,
+        agg_file::Union{String, Missing}=missing,
+        ) where T <: Number
     # Downloaded Starlink TLEs 8.21.2025
     println("Generating TLEs")
     tles::Vector{TLE} = [tle for θ ∈ 0.0:18.0:162.0 for tle ∈ generate_regular_array_TLEs(orbits=10, sats_per_orbit=num_sats, inclination_rad=θ)]
@@ -137,35 +158,67 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
         node_map[gs] => ground_station for gs ∈ gses))
     merge!(types, Dict{Int64, Entities}(
         node_map[aux_gs] => aux_ground_station for aux_gs ∈ aux_gses))
-    # println(length(Dict(key => val for (key, val) in types if val == satellite)))
-    # println(length(Dict(key => val for (key, val) in types if val == ground_station)))
-    # println(length(Dict(key => val for (key, val) in types if val == aux_ground_station)))
     # Perform simulation
     total_prob = 0
-    transmissivities::Vector{Tuple{Float64, Float64}} = []
+    time_transmissivities::Vector{Tuple{Float64, Float64}} = []
+    hop_probs = Dict{Int64, HopProb}()
     num_gses = length(gses)
     num_gs_pairs = num_gses*(num_gses-1)/2
+    daddy_matrix::Matrix{PathProbs} = [PathProbs(0, 0) for _ in 1:length(gses), _ in 1:length(gses)]
     println("Beginning simulation")
     for time_elapsed ∈ ProgressBar(0:interval_s:duration_s-1)
-        println("    Time interval: $(time_elapsed)")
+    # for time_elapsed ∈ 0:interval_s:duration_s-1
         graph = make_graph(propagators, vcat(gses, aux_gses), node_map, epoch+time_elapsed, experiment)
-        curr_prob = all_pairs_path_probs(
+        # println(summarysize(graph))
+        all_pairs_path_probs!(
             graph,
             types,
-            experiment) / num_gs_pairs
-        println("    Total path probability at interval: $(curr_prob)")
-        if !ismissing(out_file)
-            push!(transmissivities, (time_elapsed, curr_prob))
+            experiment,
+            daddy_matrix
+        )
+        # println("time elapsed: $(time_elapsed) / 86400")
+        # println("hop_probs size: $(summarysize(hop_probs)) bytes")
+        # println("graph size: $(summarysize(graph)) bytes")
+        # println("path_probs size: $(summarysize(path_probs)) bytes")
+        # println("daddy_matrix size: $(summarysize(daddy_matrix)) bytes")
+        # curr_hop_probs = aggregate_hop_probs(daddy_matrix)
+        for prob ∈ daddy_matrix
+            hop_prob = get!(hop_probs, prob.num_nodes, HopProb(0, 0))
+            hop_prob.count += 1
+            hop_prob.sum_transmissivity += prob.transmissivity
+        end
+        curr_prob = aggregate_paths_probs(daddy_matrix) / num_gs_pairs
+        if !ismissing(time_file)
+            push!(time_transmissivities, (time_elapsed, curr_prob))
         end
         total_prob += curr_prob
-    end
-    experiment_prob = total_prob / (duration_s ÷ interval_s)
-    println("Total probability over experiment: $(experiment_prob)")
-    if !ismissing(out_file)
-        open(pwd()*"/data/"*out_file, "w") do file
-            for transmissivity in transmissivities
-                write(file, "$(transmissivity[1]),$(transmissivity[2])\n")
+        if time_elapsed % 3600 == 0 && !ismissing(time_file)
+            open(pwd()*"/data/"*time_file, "w") do file
+                for transmissivity in time_transmissivities
+                    write(file, "$(transmissivity[1]),$(transmissivity[2])\n")
+                end
             end
+            time_transmissivities = []
+            GC.gc()
+        end
+            for i in 1:length(gses), j in 1:length(gses)
+                daddy_matrix[i, j] = PathProbs(0, 0)
+            end
+    end
+
+    experiment_prob = total_prob / (duration_s ÷ interval_s)
+    hop_probs = aggregate_hop_probs(daddy_matrix)
+    if !ismissing(hop_file)
+        open(pwd()*"/data/"*hop_file, "w") do file
+            for hop_prob in hop_probs
+                write(file, "$(hop_prob.num_nodes),$(hop_prob.transmissivity)\n")
+            end
+        end
+    end
+
+    if !ismissing(agg_file)
+        open(pwd()*"/data/"*agg_file, "w") do file
+            write(file, "$(experiment_prob)")
         end
     end
     return experiment_prob
@@ -180,40 +233,50 @@ function simulation_driver()
 
 end
 
-function all_pairs_path_probs(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Experiment)
-    path_probs = zeros(nv(g), nv(g)) + I
-    for edge ∈ edges(g)
-        source = min(src(edge), dst(edge))
-        destination = max(src(edge), dst(edge))
-        path_probs[source, destination] = g.weights[source, destination]
-    end
-    for k ∈ ProgressBar(1:nv(g))
-        if experiment == reflector
-            if types[k] != satellite
-                continue
-            end
-            node_cost = 1 - reflector_loss()
-        else
-            node_cost = types[k] == satellite ? 1 : 1 - swapping_loss()
+function all_pairs_path_probs!(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Experiment, path_probs::Matrix{PathProbs})
+    gses = [i for i ∈ vertices(g) if types[i] == ground_station]
+    gs_idxes = Dict{Int64, Int64}(int => idx for (idx, int) in enumerate(gses))
+    node_cost_sat = experiment == reflector ? 1 - reflector_loss() : 1
+    node_cost_gs = experiment == reflector ? 1 : 1 - swapping_loss()
+    for gs ∈ gses
+        priority_queue = PriorityQueue()
+        seen = Set{Int64}()
+        push!(seen, gs)
+        for neighbor ∈ neighbors(g, gs)
+            weight = get_weight(g, gs, neighbor)
+            enqueue!(priority_queue, Path([gs, neighbor], weight) => -weight)
         end
-        for i ∈ 1:nv(g)
-            if i == k
-                continue
+
+        while length(priority_queue) > 0
+            path = dequeue!(priority_queue)
+            curr = path.nodes[end]
+            push!(seen, curr)
+            if types[curr] == ground_station
+                path_probs[gs_idxes[gs], gs_idxes[curr]] = PathProbs(length(path.nodes), path.transmissivity)
             end
-            if experiment == dual_downlink && !xor(types[k] == satellite, types[i] == satellite)
-                continue
-            end
-            for j ∈ i+1:nv(g)
-                if j == k
-                    continue
+            node_cost = types[curr] == satellite ? node_cost_sat : node_cost_gs
+            for neighbor in neighbors(g, curr)
+                if !(neighbor ∈ seen) && path.transmissivity > 0
+                    path_cost = path.transmissivity * node_cost * g.weights[curr, neighbor]
+                    enqueue!(priority_queue, Path(vcat(path.nodes, [neighbor]), path_cost) => -path_cost)
                 end
-                if experiment == dual_downlink && !xor(types[k] == satellite, types[j] == satellite)
-                    continue
-                end
-                path_probs[i, j] = max(path_probs[i, j], path_probs[min(i, k), max(i, k)] * path_probs[min(k, j), max(k, j)] * node_cost)
             end
         end
     end
-    arr = [path_probs[i, j] for i ∈ vertices(g) if types[i] == ground_station for j ∈ i+1:nv(g) if types[j] == ground_station]
-    return sum(arr)
+    # println(summarysize(path_probs))
+    # return aggregate_hop_probs(path_probs)
+end
+
+function aggregate_paths_probs(path_probs::Matrix{PathProbs})
+    return sum(path.transmissivity for path ∈ path_probs)/2
+end
+
+function aggregate_hop_probs(path_probs::Matrix{PathProbs})
+    hop_probs = Dict{Int64, Vector{Float64}}()
+    for path ∈ path_probs
+        hop_prob = get!(hop_probs, path.num_nodes, [0, 0])
+        hop_prob[1] += 1
+        hop_prob[2] += path.transmissivity
+    end
+    return [PathProbs(k, s / n) for (k, (s, n)) ∈ hop_probs]
 end
