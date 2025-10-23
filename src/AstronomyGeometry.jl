@@ -19,7 +19,7 @@ const seconds_per_day = 60 * 60 * 24
 const equatorial_circumference_km = semimajor_radius / 500 * π
 const sin_60 = √3 / 2
 
-GS = Union{NTuple{2,Number},NTuple{3,Number},SVector{2,Number},SVector{3,Number}}
+GS = Union{NTuple{2,T},NTuple{3,T},SVector{2,T},SVector{3,T}} where T <: Number
 Point3D = Union{SVector{3,T},NTuple{3,T}} where T <: Number
 
 """

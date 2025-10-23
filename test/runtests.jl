@@ -4,6 +4,7 @@ using Test
 #using QuantumSatelliteTools.AstronomyGeometry: semimajor_radius, semiminor_radius, earth_mass_kg, seconds_per_day, G, FreespaceChannel
 using QuantumSatelliteTools.AstronomyGeometry
 using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
+using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
 @testset "QuantumSatelliteTools.jl" begin
     @testset "AstronomyGeometry.jl" begin
