@@ -132,7 +132,9 @@ Calculate the reflector loss for a satellite.
 - The reflector loss for one satellite in decibels.
 """
 function reflector_loss()
-    decibels_to_probability(5.854678746311231)
+    # decibels_to_probability(5.854678746311231)
+    # 5% loss from reflector paper
+    0.05
 end
 
 """
