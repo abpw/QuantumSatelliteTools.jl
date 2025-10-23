@@ -9,9 +9,8 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 using QuantumSatelliteTools.LossCalculation: reflector_loss, swapping_loss, total_loss
 using QuantumSatelliteTools.GenerateGroundStations: generate_population_center_gses
 using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
-# using ProgressBars: ProgressBar
+using ProgressBars: ProgressBar
 using DataStructures: PriorityQueue, enqueue!, dequeue!
-# using Base: summarysize, format_bytes
 
 @enum Entities begin
     satellite
@@ -175,14 +174,17 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
                             sats_per_orbit=num_sats,
                             inclination_rad=θ)]
     propagators = [Propagators.init(Val(:SGP4), tle) for tle ∈ tles]
-    gses::Vector{GroundStation} = (ismissing(default_gses) ? generate_population_center_gses(100)
-                                        : default_gses)
-    aux_gses::Vector{GroundStation} = ismissing(default_aux_gses) ? [] : default_aux_gses
-
+    gses::Vector{GroundStation} = (ismissing(default_gses)
+                                   ? generate_population_center_gses(100)
+                                   : default_gses)
+    aux_gses::Vector{GroundStation} = (ismissing(default_aux_gses)
+                                      ? []
+                                      : default_aux_gses)
     # Map entity to an integer index
     println("Mapping nodes to integers")
     node_map = Dict{Entity, Int64}(
-        node => index for (index, node) ∈ enumerate(vcat(propagators, gses, aux_gses)))
+        node => index
+        for (index, node) ∈ enumerate(vcat(propagators, gses, aux_gses)))
     # Map integer index of entity to entity type
     println("Mapping node integer values to types")
     types = Dict{Int64, Entities}(
@@ -198,8 +200,7 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
     num_gs_pairs = num_gses*(num_gses-1)/2
     parent_matrix::Matrix{PathProbs} = [PathProbs(0, 0) for _ in 1:length(gses), _ in 1:length(gses)]
     println("Beginning simulation")
-    for time_elapsed ∈ 0:interval_s:duration_s-1
-        println("iteration $(time_elapsed / interval_s)")
+    for time_elapsed ∈ ProgressBar(0:interval_s:duration_s-1)
         graph = make_graph(propagators, vcat(gses, aux_gses), node_map, epoch+time_elapsed, experiment)
         all_pairs_path_probs2!(graph, types, experiment, parent_matrix)
         for i ∈ axes(parent_matrix, 1)
@@ -218,65 +219,17 @@ function simulate(duration_s::Int64, interval_s::Int64, epoch::Float64,
     end
 
     hop_probs = aggregate_hop_probs(parent_matrix)
-    experiment_prob = sum(hop_prob.sum_transmissivity for hop_prob ∈ values(hop_probs)) / (duration_s ÷ interval_s)
+    experiment_prob = sum(hop_probs) / length(hop_probs)
     write_output(time_transmissivities, hop_probs, experiment_prob, time_file,
                  hop_file, agg_file)
     
-    return sum(hop_prob.sum_transmissivity / hop_prob.count for hop_prob ∈ values(hop_probs)) / (length(hop_probs) - 1)
+    return experiment_prob
 end
 
-function simulation_driver()
-    # Perform experiments
-    total_probs = Dict{}
-    for experiment ∈ [Val(:REF), Val(:DD)]
-        simulate
-    end
-
-end
-
-# function all_pairs_path_probs!(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Experiment, path_probs::Matrix{PathProbs})
-#     gses = [i for i ∈ vertices(g) if types[i] == ground_station]
-#     for i in 1:length(gses), j in 1:length(gses)
-#         path_probs[i, j] = PathProbs(0, 0)
-#     end
-#     gs_idxes = Dict{Int64, Int64}(int => idx for (idx, int) in enumerate(gses))
-#     node_cost_sat = experiment == reflector ? 1 - reflector_loss() : 1
-#     node_cost_gs = experiment == reflector ? 1 : 1 - swapping_loss()
-#     # pq_size::Int64 = 0
-#     for gs ∈ gses
-#         priority_queue = PriorityQueue()
-#         seen = Set{Int64}()
-#         push!(seen, gs)
-#         for neighbor ∈ neighbors(g, gs)
-#             weight = get_weight(g, gs, neighbor)
-#             enqueue!(priority_queue, Path([gs, neighbor], weight) => -weight)
-#         end
-
-#         while length(priority_queue) > 0
-#             # pq_size = max(pq_size, summarysize(priority_queue))
-#             path = dequeue!(priority_queue)
-#             curr = path.nodes[end]
-#             push!(seen, curr)
-#             if types[curr] == ground_station
-#                 path_probs[gs_idxes[gs], gs_idxes[curr]] = PathProbs(length(path.nodes), path.transmissivity)
-#             end
-#             node_cost = types[curr] == satellite ? node_cost_sat : node_cost_gs
-#             for neighbor in neighbors(g, curr)
-#                 if !(neighbor ∈ seen) && path.transmissivity > 0
-#                     path_cost = path.transmissivity * node_cost * g.weights[curr, neighbor]
-#                     enqueue!(priority_queue, Path(vcat(path.nodes, [neighbor]), path_cost) => -path_cost)
-#                 end
-#             end
-#         end
-
-#     end
-    # println(summarysize(path_probs))
-    # return aggregate_hop_probs(path_probs)
-
-    # println("largest pq size: $(format_bytes(pq_size))")
-# end
-
-function all_pairs_path_probs2!(g::SimpleWeightedGraph, types::Dict{Int64, Entities}, experiment::Experiment, path_probs::Matrix{PathProbs})
+function all_pairs_path_probs2!(g::SimpleWeightedGraph,
+                                types::Dict{Int64, Entities},
+                                experiment::Experiment,
+                                path_probs::Matrix{PathProbs})
     gses = [i for i ∈ vertices(g) if types[i] == ground_station]
     gs_idxes = Dict{Int64, Int64}(int => idx for (idx, int) in enumerate(gses))
     for i in 1:length(gses), j in 1:length(gses)
@@ -333,7 +286,6 @@ function all_pairs_path_probs2!(g::SimpleWeightedGraph, types::Dict{Int64, Entit
             end
         end
     end
-    # return sum([(dists[i, j] == Inf ? 0 : dists[i, j]) for i ∈ 1:nv(g) if types[i] == ground_station for j in 1:nv(g) if types[j] == ground_station]) / 2
 end
 
 function aggregate_paths_probs(path_probs::Matrix{PathProbs})
@@ -347,5 +299,8 @@ function aggregate_hop_probs(path_probs::Matrix{PathProbs})
         hop_prob.count += 1
         hop_prob.sum_transmissivity += path.transmissivity
     end
-    return hop_probs
+    delete!(hop_probs, 0)
+    return Dict{Int64, Float64}(
+        num => hop_prob.sum_transmissivity / hop_prob.count
+        for (num, hop_prob) in hop_probs)
 end
