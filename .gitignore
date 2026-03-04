@@ -4,5 +4,22 @@
 /databases/satcat.csv
 /databases/starlink.tle
 /scripts/aux_gses.txt
-/data
-.vscode
+/.vscode
+
+# DrWatson standard structure: ignore generated content, keep structure
+/_research/
+/data/
+/plots/
+/notebooks/
+/videos/
+
+# LaTeX and build artifacts
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.toc
+*.fdb_latexmk
+*.fls
+*.synctex.gz
