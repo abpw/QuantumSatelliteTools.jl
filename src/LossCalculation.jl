@@ -117,12 +117,13 @@ Calculate the pointing loss for a channel.
 - `pointing_jitter::Number`: The pointing jitter in microradians (default 5).
 
 # Returns
-- The total pointing loss.
+- The pointing loss in decibels (dB), where larger values mean more loss.
 """
 function pointing_loss_dB(channel::FreespaceChannel, pointing_jitter::Float64=5.0)
-    # L_PNT = exp(-8Θ²ⱼ/w²₀)
-    exp(-8 * (pointing_jitter * 1e-6)^2 / waist_radius(channel)^2)
-
+    # Pointing transmittance factor (0-1)
+    η_pnt = exp(-8 * (pointing_jitter * 1e-6)^2 / waist_radius(channel)^2)
+    # Convert transmittance to loss in dB so it can be added to other dB losses.
+    return -10 * log10(η_pnt)
 end
 
 """
