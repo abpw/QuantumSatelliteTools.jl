@@ -26,6 +26,6 @@ Add the package using Julia's package manager:
 ## Index
 
 ```@index
-Pages   = ["AstronomyGeometry.md", "GenerateGroundStations.md", "GenerateTLEs.md", "FreespaceChannels.md", "LossCalculation.md"]
+Pages   = ["AstronomyGeometry.md", "GenerateGroundStations.md", "GenerateSatellites.md", "FreespaceChannels.md", "LossCalculation.md"]
 Modules = []
 ```
