@@ -6,7 +6,7 @@ using Statistics
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
 using QuantumSatelliteTools
 using QuantumSatelliteTools.GenerateGroundStations: generate_equispaced_gses
-using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
+using QuantumSatelliteTools.GenerateSatellites: generate_regular_array_TLEs
 using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 using QuantumSatelliteTools.LossCalculation: total_loss
 

@@ -3,7 +3,7 @@ using Test
 
 #using QuantumSatelliteTools.AstronomyGeometry: semimajor_radius, semiminor_radius, earth_mass_kg, seconds_per_day, G, FreespaceChannel
 using QuantumSatelliteTools.AstronomyGeometry
-using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
+using QuantumSatelliteTools.GenerateSatellites: generate_regular_array_TLEs
 using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
 @testset "QuantumSatelliteTools.jl" begin
@@ -147,7 +147,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
             @test ch === nothing || (ch.distance_m > 0 && ch.min_altitude_m > 0)
         end
     end
-    @testset "GenerateTLEs.jl" begin
+    @testset "GenerateGroundStations.jl" begin
         @testset "generate_regular_array_TLEs: defaults" begin
             # Default call
             tles = generate_regular_array_TLEs()

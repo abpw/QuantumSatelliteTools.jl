@@ -377,8 +377,8 @@ end
 Compute the distance between two satellites given their TLEs.
 
 # Arguments
-- `sat_tle1::TLE`: First satellite TLE (see GenerateTLEs or [SatelliteToolboxTle.jl](https://github.com/JuliaSpace/SatelliteToolboxTle.jl)).
-- `sat_tle2::TLE`: Second satellite TLE (see GenerateTLEs or [SatelliteToolboxTle.jl](https://github.com/JuliaSpace/SatelliteToolboxTle.jl)).
+- `sat_tle1::TLE`: First satellite TLE (see GenerateSatellites or [SatelliteToolboxTle.jl](https://github.com/JuliaSpace/SatelliteToolboxTle.jl)).
+- `sat_tle2::TLE`: Second satellite TLE (see GenerateSatellites or [SatelliteToolboxTle.jl](https://github.com/JuliaSpace/SatelliteToolboxTle.jl)).
 
 # Keyword Arguments
 - `time::Union{Number, DateTime}`: Time of distance calculation (defaults to the later epoch of the satellites).
