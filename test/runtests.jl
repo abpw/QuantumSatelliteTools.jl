@@ -34,7 +34,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
         @testset "eci_to_ecef/geodetic (propagator & state vector)" begin
             # Build a simple constellation and pick one satellite
-            tles = generate_regular_array_TLEs(orbital_planes=4, sats_per_orbit=6, altitude_km=500, inclination_rad=π/2)
+            tles = generate_regular_array_TLEs(orbital_planes=4, sats_per_plane=6, altitude_km=500, inclination_rad=π/2)
             tle = tles[1]
             sat::OrbitPropagatorSgp4 = Propagators.init(Val(:SGP4), tle)
 
@@ -60,7 +60,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
         @testset "eci_to_ecef/eci_to_geodetic (point/tuple overloads)" begin
             # Reuse the same satellite and time, but call point overloads
-            tles = generate_regular_array_TLEs(orbital_planes=1, sats_per_orbit=3)
+            tles = generate_regular_array_TLEs(orbital_planes=1, sats_per_plane=3)
             sat = Propagators.init(Val(:SGP4), tles[2])
             sv = Propagators.propagate!(sat, 0, OrbitStateVector)
             x, y, z = sv.r
@@ -104,7 +104,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
         @testset "sat_sat_distance & LOS" begin
             # Two nearby sats in the same orbit should have finite LOS distance
-            tles = generate_regular_array_TLEs(orbital_planes=1, sats_per_orbit=60, altitude_km=500)
+            tles = generate_regular_array_TLEs(orbital_planes=1, sats_per_plane=60, altitude_km=500)
             sat1 = Propagators.init(Val(:SGP4), tles[1])
             sat2 = Propagators.init(Val(:SGP4), tles[2])
             d = sat_sat_distance(sat1, sat2; time=max(sat1.sgp4d.epoch, sat2.sgp4d.epoch))
@@ -127,7 +127,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
         end
 
         @testset "FreespaceChannel (sat-GS)" begin
-            tles = generate_regular_array_TLEs(orbital_planes=2, sats_per_orbit=8, altitude_km=500)
+            tles = generate_regular_array_TLEs(orbital_planes=2, sats_per_plane=8, altitude_km=500)
             sat = Propagators.init(Val(:SGP4), tles[1])
             # Place GS at current subsatellite point to guarantee visibility
             sv = Propagators.propagate!(sat, 0, OrbitStateVector)
@@ -140,7 +140,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
         @testset "FreespaceChannel (sat-sat)" begin
             # Choose neighboring sats in same orbit to improve LOS likelihood
-            tles = generate_regular_array_TLEs(orbital_planes=1, sats_per_orbit=10, altitude_km=500)
+            tles = generate_regular_array_TLEs(orbital_planes=1, sats_per_plane=10, altitude_km=500)
             sat1 = Propagators.init(Val(:SGP4), tles[3])
             sat2 = Propagators.init(Val(:SGP4), tles[4])
             ch = FreespaceChannel(sat1, sat2; time=max(sat1.sgp4d.epoch, sat2.sgp4d.epoch))
@@ -171,19 +171,19 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
                 @test all(isapprox(t.raan, r; atol=1e-9) for t in block)
             end
 
-            # Mean anomaly pattern: 360/sats_per_orbit*(sat_in_orbit-1 + (orbit-1)/orbits)
-            sats_per_orbit = 18
+            # Mean anomaly pattern: 360/sats_per_plane*(sat_in_orbit-1 + (orbit-1)/orbits)
+            sats_per_plane = 18
             orbits = 12
-            step = 360 / sats_per_orbit
+            step = 360 / sats_per_plane
             # Check a few representative entries
             # First satellite of first orbit
             @test isapprox(tles[1].mean_anomaly, step * (0 + (0)/orbits); atol=1e-9)
             # Last satellite of first orbit
-            @test isapprox(tles[sats_per_orbit].mean_anomaly, step * (sats_per_orbit-1 + 0/orbits); atol=1e-9)
+            @test isapprox(tles[sats_per_plane].mean_anomaly, step * (sats_per_plane-1 + 0/orbits); atol=1e-9)
             # First satellite of second orbit
-            @test isapprox(tles[sats_per_orbit+1].mean_anomaly, step * (0 + (1)/orbits); atol=1e-9)
+            @test isapprox(tles[sats_per_plane+1].mean_anomaly, step * (0 + (1)/orbits); atol=1e-9)
             # Last satellite of last orbit
-            @test isapprox(tles[end].mean_anomaly, step * (sats_per_orbit-1 + (orbits-1)/orbits); atol=1e-9)
+            @test isapprox(tles[end].mean_anomaly, step * (sats_per_plane-1 + (orbits-1)/orbits); atol=1e-9)
 
             # Eccentricity and argument of perigee when frozen_orbits=false
             @test all(isapprox(t.eccentricity, 1e-7; atol=1e-9) for t in tles)
@@ -197,13 +197,13 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
         @testset "generate_regular_array_TLEs: custom params" begin
             orbital_planes = 3
-            sats_per_orbit = 5
+            sats_per_plane = 5
             altitude_km = 600
             inc_rad = 0.3
-            tles = generate_regular_array_TLEs(orbital_planes=orbital_planes, sats_per_orbit=sats_per_orbit, altitude_km=altitude_km, inclination_rad=inc_rad, frozen_orbits=false)
+            tles = generate_regular_array_TLEs(orbital_planes=orbital_planes, sats_per_plane=sats_per_plane, altitude_km=altitude_km, inclination_rad=inc_rad, frozen_orbits=false)
 
             # Count check
-            @test length(tles) == orbits * sats_per_orbit
+            @test length(tles) == orbits * sats_per_plane
 
             # Inclination check (in degrees)
             @test all(isapprox(t.inclination, inc_rad/π*180; atol=1e-9) for t in tles)

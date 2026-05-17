@@ -101,7 +101,7 @@ Generate synthetic TLEs for a regular constellation of satellites.
 # Keyword Arguments
 - `name_prefix::String="SAT"`: Prefix for satellite names.
 - `orbital_planes::Int=12`: Number of orbital planes.
-- `sats_per_orbit::Int=18`: Satellites per orbital plane.
+- `sats_per_plane::Int=18`: Satellites per orbital plane.
 - `altitude_km::Int=500`: Altitude of the orbits in kilometers.
 - `inclination_rad::Float64=π/2`: Inclination angle in radians.
 - `frozen_orbits::Bool=false`: Whether to use frozen orbit parameters. See https://juliaspace.github.io/SatelliteAnalysis.jl/stable/man/frozen_orbits/.
@@ -111,7 +111,7 @@ Generate synthetic TLEs for a regular constellation of satellites.
 """
 function generate_regular_array_TLEs(;
             name_prefix::String="SAT",
-            orbital_planes::Int=12, sats_per_orbit::Int=18,
+            orbital_planes::Int=12, sats_per_plane::Int=18,
             altitude_km::Int=500,
             inclination_rad::Float64=π/2,
             frozen_orbits::Bool=false)
@@ -119,9 +119,9 @@ function generate_regular_array_TLEs(;
     TLEs = []
     for plane ∈ 1:orbital_planes
         Omega = 180*(plane - 1)/orbital_planes
-        for sat_in_orbit ∈ 1:sats_per_orbit
-            anomaly = 360/sats_per_orbit*(sat_in_orbit - 1 + (plane - 1)/orbital_planes)
-            number = (plane - 1)*sats_per_orbit + sat_in_orbit
+        for sat_in_orbit ∈ 1:sats_per_plane
+            anomaly = 360/sats_per_plane*(sat_in_orbit - 1 + (plane - 1)/orbital_planes)
+            number = (plane - 1)*sats_per_plane + sat_in_orbit
             name = name_prefix * " " * string(number)
             if frozen_orbits
                 eccentricity, argument_of_perigee = SatelliteAnalysis.frozen_orbit(altitude_km*1000+semimajor_radius, rad2deg(inclination_rad))

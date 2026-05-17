@@ -20,14 +20,14 @@ Build a simple synthetic constellation and initialize SGP4 propagators.
 function build_constellation(;
     name_prefix::String,
     orbital_planes::Int,
-    sats_per_orbit::Int,
+    sats_per_plane::Int,
     altitude_km::Int,
     inclination_rad::Float64,
 )
     tles = generate_regular_array_TLEs(
         name_prefix=name_prefix,
         orbital_planes=planes,
-        sats_per_orbit=sats_per_orbit,
+        sats_per_plane=sats_per_plane,
         altitude_km=altitude_km,
         inclination_rad=inclination_rad,
     )
@@ -112,14 +112,14 @@ gses = GroundStation[(Float64(gs[1]), Float64(gs[2])) for gs in generate_equispa
 constellation_a = build_constellation(
     name_prefix="SPARSE",
     orbital_planes=4,
-    sats_per_orbit=4,
+    sats_per_plane=4,
     altitude_km=550,
     inclination_rad=deg2rad(53.0),
 )
 constellation_b = build_constellation(
     name_prefix="DENSE",
     orbital_planes=8,
-    sats_per_orbit=8,
+    sats_per_plane=8,
     altitude_km=550,
     inclination_rad=deg2rad(53.0),
 )
