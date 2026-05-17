@@ -1,6 +1,6 @@
 using SatelliteToolboxTle
+using QuantumSatelliteTools.GenerateSatellites
 using QuantumSatelliteTools.GenerateGroundStations
-using QuantumSatelliteTools.GenerateTLEs
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
 using QuantumSatelliteTools.AstronomyGeometry: GS
 using SimpleWeightedGraphs: SimpleWeightedGraph, get_weight
@@ -8,7 +8,7 @@ using Graphs: neighbors, vertices, nv
 using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 using QuantumSatelliteTools.LossCalculation: reflector_loss, swapping_loss, total_loss
 using QuantumSatelliteTools.GenerateGroundStations: generate_population_center_gses
-using QuantumSatelliteTools.GenerateTLEs: generate_regular_array_TLEs
+using QuantumSatelliteTools.GenerateSatellites: generate_regular_array_TLEs
 using ProgressBars: ProgressBar
 using DataStructures: PriorityQueue, enqueue!, dequeue!
 
