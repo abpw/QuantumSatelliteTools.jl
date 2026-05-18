@@ -20,7 +20,7 @@ end
 
 module GenerateGroundStations
 export is_within_min_distance, is_land
-export generate_population_center_gses, generate_city_gses, generate_random_gses, generate_equispaced_gses, generate_grid_gses
+export generate_population_center_gses, _generate_population_center_gses, generate_city_gses, generate_random_gses, generate_equispaced_gses, generate_grid_gses
 include("GenerateGroundStations.jl")
 end
 

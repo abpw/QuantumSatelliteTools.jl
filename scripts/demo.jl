@@ -26,7 +26,7 @@ function build_constellation(;
 )
     tles = generate_regular_array_TLEs(
         name_prefix=name_prefix,
-        orbital_planes=planes,
+        orbital_planes=orbital_planes,
         sats_per_plane=sats_per_plane,
         altitude_km=altitude_km,
         inclination_rad=inclination_rad,

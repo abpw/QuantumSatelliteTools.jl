@@ -72,7 +72,7 @@ Generate ground stations at the most populous cities based on a database.
 # Returns
 - `Vector`: A vector of `(geodetic latitude in radians, geodetic longitude in radians)` tuples for selected ground stations.
 """
-function generate_population_center_gses(n::Int; other_gses::Vector=[], timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, verbose::Bool=false)
+function _generate_population_center_gses(n::Int; other_gses::Vector=[], timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, verbose::Bool=false)
     gses = copy(other_gses)
     n_cities = 0
     for (i, row) ∈ enumerate(CSV.Rows(city_data_file_str))
@@ -88,10 +88,13 @@ function generate_population_center_gses(n::Int; other_gses::Vector=[], timeout:
         lat = π/180*parse(Float64, row.lat)
         lon = π/180*parse(Float64, row.lng)
         if min_distance == 0 || is_within_min_distance(lat, lon, gses, min_distance)
-            push!(gses, (lat, lon))
+            push!(gses, row)
             n_cities += 1
         end
     end
+end
+function generate_population_center_gses(n::Int; other_gses::Vector=[], timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, verbose::Bool=false)
+    return [(π/180*parse(Float64, gs.lat), π/180*parse(Float64, gs.lng)) for gs in _generate_population_center_gses(n; other_gses=other_gses, timeout=timeout, min_distance=min_distance, verbose=verbose)]
 end
 
 """
