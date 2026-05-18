@@ -69,8 +69,11 @@ Generate ground stations at the most populous cities based on a database.
 - `min_distance::Number=0`: Minimum distance in meters required between any two stations.
 - `verbose::Bool=false`: Print messages if true.
 
-# Returns
+# generate_population_center_gses returns
 - `Vector`: A vector of `(geodetic latitude in radians, geodetic longitude in radians)` tuples for selected ground stations.
+
+# _generate_population_center_gses returns
+- `Vector`: A vector of CSV rows with all available information for selected ground stations.
 """
 function _generate_population_center_gses(n::Int; other_gses::Vector=[], timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, verbose::Bool=false)
     gses = copy(other_gses)
@@ -93,6 +96,25 @@ function _generate_population_center_gses(n::Int; other_gses::Vector=[], timeout
         end
     end
 end
+
+"""
+Generate ground stations at the most populous cities based on a database.
+
+# Arguments
+- `n::Int`: Number of population centers to select.
+
+# Keyword Arguments
+- `other_gses::Vector=[]`: Existing ground stations to preserve.
+- `timeout::Union{Integer, Float64}=Inf`: Max number of rows to scan from file.
+- `min_distance::Number=0`: Minimum distance in meters required between any two stations.
+- `verbose::Bool=false`: Print messages if true.
+
+# generate_population_center_gses returns
+- `Vector`: A vector of `(geodetic latitude in radians, geodetic longitude in radians)` tuples for selected ground stations.
+
+# _generate_population_center_gses returns
+- `Vector`: A vector of CSV rows with all available information for selected ground stations.
+"""
 function generate_population_center_gses(n::Int; other_gses::Vector=[], timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, verbose::Bool=false)
     return [(π/180*parse(Float64, gs.lat), π/180*parse(Float64, gs.lng)) for gs in _generate_population_center_gses(n; other_gses=other_gses, timeout=timeout, min_distance=min_distance, verbose=verbose)]
 end
