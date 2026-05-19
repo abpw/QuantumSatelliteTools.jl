@@ -39,4 +39,9 @@ export atmospheric_loss_dB, geometric_loss_dB, pointing_loss_dB, reflector_loss,
 include("LossCalculation.jl")
 end
 
+module Simulator
+export build_optimized_constellation, simulate_step
+include("Simulator.jl")
+end
+
 end

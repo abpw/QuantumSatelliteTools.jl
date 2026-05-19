@@ -5,6 +5,8 @@ using SatelliteToolboxBase: OrbitStateVector
 using SatelliteAnalysis: is_ground_facility_visible
 using SatelliteToolboxTransformations: ecef_to_ned
 
+abstract type AbstractChannel end
+
 @enum Conditions begin
     clear
     fog
@@ -13,7 +15,7 @@ using SatelliteToolboxTransformations: ecef_to_ned
 end
 # TODO doctring for struct
 
-struct FreespaceChannel
+struct FreespaceChannel <: AbstractChannel
     distance_m::Number
     elevation_angle_rad::Number
     min_altitude_m::Number
