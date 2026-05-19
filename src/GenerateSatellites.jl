@@ -1,5 +1,6 @@
 using SatelliteToolboxTle
 using SatelliteAnalysis
+using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
 using Downloads
 using CSV
 using ..AstronomyGeometry: semimajor_radius, earth_mass_kg, seconds_per_day, G
@@ -25,7 +26,7 @@ TODO: remove inactive satellites
 # Keyword Arguments
 - `verbose::Bool=false`: If true, prints status messages during fetching.
 """
-function update_starlink_tles(;verbose::Bool=false)
+function update_starlink_TLEs(;verbose::Bool=false)
     existing_IDs = []
     if isfile(starlink_TLE_file_path)
         existing_TLEs = SatelliteToolboxTle.read_tles_from_file(starlink_TLE_file_path)
@@ -96,6 +97,23 @@ function get_active_satellite_TLEs(;OBJECT_NAME::String="", row_filter::Function
 end
 
 """
+Retrieve and return Propagator objects of active payload satellites from `satcat.csv` and Celestrak.
+
+# Keyword Arguments
+- `OBJECT_NAME::String=""`: Optional filter to match part of the satellite name.
+- `row_filter::Function=sat_row->true`: Function to filter rows from `satcat.csv`.
+- `return_partial::Bool=true`: If true, returns partial results even if some fetches fail.
+- `verbose=false`: If true, prints progress info.
+
+# Returns
+- `Vector{Propagator}`: A vector of fetched Propagator objects.
+"""
+function get_active_satellites(;OBJECT_NAME::String="", row_filter::Function=sat_row->true, return_partial::Bool=true, verbose=false)
+    TLEs = get_active_satellite_TLEs(OBJECT_NAME=OBJECT_NAME, row_filter=row_filter, return_partial=return_partial, verbose=verbose)
+    return [Propagators.init(Val(:SGP4), tle) for tle in TLEs]
+end
+
+"""
 Generate synthetic TLEs for a regular constellation of satellites.
 
 # Keyword Arguments
@@ -140,4 +158,28 @@ function generate_regular_array_TLEs(;
         end
     end
     return TLEs
+end
+
+"""
+Generate synthetic propagators for a regular constellation of satellites.
+
+# Keyword Arguments
+- `name_prefix::String="SAT"`: Prefix for satellite names.
+- `orbital_planes::Int=12`: Number of orbital planes.
+- `sats_per_plane::Int=18`: Satellites per orbital plane.
+- `altitude_km::Int=500`: Altitude of the orbits in kilometers.
+- `inclination_rad::Float64=π/2`: Inclination angle in radians.
+- `frozen_orbits::Bool=false`: Whether to use frozen orbit parameters. See https://juliaspace.github.io/SatelliteAnalysis.jl/stable/man/frozen_orbits/.
+
+# Returns
+- `Vector{Propagator}`: Vector of synthetic Propagator objects.
+"""
+function generate_regular_array(;
+            name_prefix::String="SAT",
+            orbital_planes::Int=12, sats_per_plane::Int=18,
+            altitude_km::Int=500,
+            inclination_rad::Float64=π/2,
+            frozen_orbits::Bool=false)
+    TLEs = generate_regular_array_TLEs(name_prefix=name_prefix, orbital_planes=orbital_planes, sats_per_plane=sats_per_plane, altitude_km=altitude_km, inclination_rad=inclination_rad, frozen_orbits=frozen_orbits)
+    return [Propagators.init(Val(:SGP4), tle) for tle in TLEs]
 end

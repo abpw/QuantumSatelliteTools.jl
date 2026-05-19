@@ -25,7 +25,7 @@ include("GenerateGroundStations.jl")
 end
 
 module GenerateSatellites
-export refresh_satcat, update_starlink_tles, save_TLEs, get_active_satellite_TLEs, generate_regular_array_TLEs
+export refresh_satcat, update_starlink_TLEs, save_TLEs, get_active_satellite_TLEs, generate_regular_array_TLEs, get_active_satellites, generate_regular_array
 include("GenerateSatellites.jl")
 end
 
