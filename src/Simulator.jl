@@ -1,6 +1,20 @@
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
 using ..GenerateSatellites: generate_regular_array_TLEs
 using ..FreespaceChannels: FreespaceChannel, AbstractChannel
+using ..LossCalculation: total_loss
+
+"""
+A label for a node in the network graph.
+
+# Fields
+- `type::NodeTypes`: The type of the node (e.g., satellite, ground station).
+- `tags::Vector{String}`: Additional tags for the node
+    (e.g., aux for ground stations).
+"""
+struct NodeLabel
+    type::NodeTypes
+    tags::Vector{String}
+end
 
 """
 Enum identifying the role or type of a node in the quantum network.
@@ -10,10 +24,9 @@ Enum identifying the role or type of a node in the quantum network.
 - `gs`: A primary ground station node.
 - `aux_gs`: An auxiliary ground station node.
 """
-@enum NodeLabels begin
+@enum NodeTypes begin
     sat
     gs
-    aux_gs
 end
 
 """
@@ -40,9 +53,9 @@ struct Node
     id::Int
     obj::Union{Propagator, GroundStation}
     weight::Float64
-    labels::Vector{NodeLabels}
+    label::NodeLabel
 
-    Node(obj, weight, labels) = new(next_node_id(), obj, weight, labels)
+    Node(obj, weight, label) = new(next_node_id(), obj, weight, label)
 end
 
 """
@@ -103,6 +116,31 @@ function build_optimized_constellation(;
 end
 
 """
+Create a link between two nodes if the pairwise conditions are met.
+
+# Arguments
+- `node1::Node`: First node.
+- `node2::Node`: Second node.
+- `pairwise_fn::Function`: A function that takes two nodes and returns true if
+    conditions are met, or false otherwise.
+
+# Keyword Arguments
+- `kwargs...`: Additional keyword arguments to pass to Link.
+
+# Returns
+- `Union{Link, Nothing}`: The created link if conditions are met,
+    or `nothing` otherwise.
+"""
+function create_link(node1::Node, node2::Node, pairwise_fns::Vector{Function}; kwargs...)
+    for pairwise_fn in pairwise_fns
+        if pairwise_fn(node1, node2)
+            return Link(node1, node2, FreespaceChannel(node1.obj, node2.obj; kwargs...))
+        end
+    end
+    return nothing
+end
+
+"""
 Dual downlink pairwise function that checks if one node is a satellite and the
 other is a ground station.
 
@@ -114,15 +152,40 @@ other is a ground station.
 - `Bool`: `true` if one node is a satellite and the other is a ground station,
   `false` otherwise.
 """
-function downlink_pairwise_fn(node1::Node, node2::Node; kwargs...)
-    if ((NodeLabels.sat in node1.labels && (NodeLabels.gs in node2.labels || NodeLabels.aux_gs in node2.labels))
-            || (NodeLabels.sat in node2.labels && (NodeLabels.gs in node1.labels || NodeLabels.aux_gs in node1.labels)))
-        channel = FreespaceChannel(node1.obj, node2.obj, kwargs...)
-        if !isnothing(channel)
-            return Link(node1, node2, channel)
-        end
+function downlink_pairwise_fn(node1::Node, node2::Node)
+    return ((node1.label.type == NodeTypes.sat && node2.label.type == NodeTypes.gs)
+        || (node1.label.type == NodeTypes.gs && node2.label.type == NodeTypes.sat))
+end
+
+"""
+Inter-satellite pairwise function that checks if both nodes are satellites.
+
+# Arguments
+- `node1::Node`: First node.
+- `node2::Node`: Second node.
+
+# Returns
+- `Bool`: `true` if both nodes are satellites, `false` otherwise.
+"""
+function intersat_pairwise_fn(node1::Node, node2::Node)
+    return node1.label.type == NodeTypes.sat && node2.label.type == NodeTypes.sat
+end
+
+"""
+Default evaluation function that computes the total transmissivity across all
+links.
+
+# Arguments
+- `links::Vector{Link}`: A vector of links to evaluate.
+
+# Returns
+- `Float64`: The total transmissivity across all links.
+"""
+function default_evaluation_fn(links::Vector{Link})
+    if isempty(links)
+        return 0.0
     end
-    return nothing
+    return sum(1 - total_loss(link.channel) for link in links)
 end
 
 """
@@ -138,7 +201,7 @@ Perform a single time step of the simulation, applying the evaluation function.
 - The result of the evaluation function.
 """
 function simulate_step(;
-    pairwise_fn::Function,
+    pairwise_fns::Vector{Function},
     evaluation_fn::Function,
     nodes::Vector{Node},
     time::Float64;
@@ -150,9 +213,10 @@ function simulate_step(;
     links = Link[]
     for i in 1:length(nodes)
         for j in (i+1):length(nodes)
-            link = pairwise_fn(
+            link = create_link(
                 nodes[i],
                 nodes[j],
+                pairwise_fns=pairwise_fns,
                 time=time,
                 transmitter_diameter_m=tx_aperture_m,
                 receiver_diameter_m=rx_aperture_m,
@@ -175,7 +239,7 @@ function simulate(
     nodes::Vector{Node},
     duration_s::Int,
     step_s::Int;
-    pairwise_fn::Function=downlink_pairwise_fn,
+    pairwise_fns::Vector{Function}=[downlink_pairwise_fn],
     evaluation_fn::Function=default_evaluation_fn,
     tx_aperture_m::Float64=0.6,
     rx_aperture_m::Float64=0.6,
@@ -188,7 +252,7 @@ function simulate(
         # evaluate the current state of the network
         push!(metrics, simulate_step(
             nodes=nodes,
-            pairwise_fn=pairwise_fn,
+            pairwise_fns=pairwise_fns,
             evaluation_fn=evaluation_fn,
             time=t,
             tx_aperture_m=tx_aperture_m,
