@@ -23,8 +23,21 @@ Convert a loss value from decibels to probability.
 # Returns
 - The loss as a probability (0 - 1).
 """
-function decibels_to_probability(loss_dB::Number)
-    10^(loss_dB / -10)
+function dB_to_prob(loss_dB::Number)
+    1 - 10^(loss_dB / -10)
+end
+
+"""
+Convert a loss value from probability to decibels.
+
+# Arguments
+- `loss_prob::Number`: The loss as a probability (0 - 1).
+
+# Returns
+- The loss in decibels.
+"""
+function prob_to_dB(loss_prob::Number)
+    -10 * log10(1 - loss_prob)
 end
 
 """
@@ -37,7 +50,7 @@ Calculate the geometric loss for a channel.
 - The total geometric loss.
 """
 function geometric_loss_dB(channel::FreespaceChannel)
-    20*log10(channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) / channel.receiver_diameter_m
+    20*log10((channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) / channel.receiver_diameter_m)
 end
 
 """
@@ -139,7 +152,7 @@ function reflector_loss()
 end
 
 """
-Calculate the swapping loss for a ground station.
+Calculate the swapping loss for a ground station as a probability.
 
 # Arguments
 - `memory_read_write_loss::Number`: Read/write loss of the quantum memory as a probability.
@@ -152,6 +165,18 @@ function swapping_loss(memory_read_write_loss::Float64=0.8)
     0.5 * memory_read_write_loss
 end
 
+"""
+Calculate the swapping loss for a ground station in decibels.
+
+# Arguments
+- `memory_read_write_loss::Number`: Read/write loss of the quantum memory as a probability.
+
+# Returns
+- The swapping loss for one ground station in decibels.
+"""
+function swapping_loss_dB(memory_read_write_loss::Float64=0.8)
+    return prob_to_dB(swapping_loss(memory_read_write_loss))
+end
 
 """
 Calculate total loss in a freespace channel.
@@ -160,12 +185,26 @@ Calculate total loss in a freespace channel.
 - `channel::FreespaceChannel`: A freespace channel.
 
 # Returns
-- The probability of a failed transmission through the channel.
+- The total loss in decibels.
 """
-function total_loss(channel::FreespaceChannel)
+function total_loss_dB(channel::FreespaceChannel)
     # L_tot = L_geo + L_atm + L_pnt
     g = geometric_loss_dB(channel)
     a = atmospheric_loss_dB(channel)
     p = pointing_loss_dB(channel)
-    return decibels_to_probability(g + a + p)
+
+    return g + a + p
+end
+
+"""
+Calculate total loss in a freespace channel as a probability.
+
+# Arguments
+- `channel::FreespaceChannel`: A freespace channel.
+
+# Returns
+- The total loss as a probability (0 - 1).
+"""
+function total_loss(channel::FreespaceChannel)
+    dB_to_prob(total_loss_dB(channel))
 end

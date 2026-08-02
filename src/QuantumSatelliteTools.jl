@@ -40,7 +40,7 @@ include("LossCalculation.jl")
 end
 
 module Simulator
-export build_optimized_constellation, simulate_step
+export build_optimized_constellation, simulate, Node, Link, NodeLabel, satellite, ground_station, GroundStation, Propagator
 include("Simulator.jl")
 end
 

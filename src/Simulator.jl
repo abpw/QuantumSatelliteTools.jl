@@ -3,6 +3,23 @@ using ..GenerateSatellites: generate_regular_array_TLEs
 using ..FreespaceChannels: FreespaceChannel, AbstractChannel
 using ..LossCalculation: total_loss
 
+# Ground stations are represented as (latitude_rad, longitude_rad) tuples.
+const GroundStation = Tuple{Float64,Float64}
+const Propagator = OrbitPropagatorSgp4{Float64,Float64}
+
+"""
+Enum identifying the role or type of a node in the quantum network.
+
+# Variants
+- `sat`: A satellite node.
+- `gs`: A primary ground station node.
+- `aux_gs`: An auxiliary ground station node.
+"""
+@enum NodeTypes begin
+    satellite
+    ground_station
+end
+
 """
 A label for a node in the network graph.
 
@@ -14,19 +31,6 @@ A label for a node in the network graph.
 struct NodeLabel
     type::NodeTypes
     tags::Vector{String}
-end
-
-"""
-Enum identifying the role or type of a node in the quantum network.
-
-# Variants
-- `sat`: A satellite node.
-- `gs`: A primary ground station node.
-- `aux_gs`: An auxiliary ground station node.
-"""
-@enum NodeTypes begin
-    sat
-    gs
 end
 
 """
@@ -51,7 +55,7 @@ A node in the network graph representing either a propagator or ground station.
 """
 struct Node
     id::Int
-    obj::Union{Propagator, GroundStation}
+    obj::Union{Propagator,GroundStation}
     weight::Float64
     label::NodeLabel
 
@@ -87,7 +91,8 @@ satellites respectively.
 - `orbits`: Number of orbits per inclination angle (default 10).
 
 # Returns
-- A vector of SGP4 propagators initialized with the generated TLEs.
+- `Vector{Propagator}`: A vector of SGP4 propagators initialized with the
+    generated TLEs.
 """
 function build_optimized_constellation(;
     orbits::Int=10,
@@ -98,19 +103,19 @@ function build_optimized_constellation(;
     )
 
     propagators = Propagator[]
-    
-    for (inclination_rad, sats_per_orbit) in satellite_parameters
+
+    for (inclination_rad, sats_per_orbit) ∈ satellite_parameters
         tles = generate_regular_array_TLEs(
-            orbits=orbits,
-            sats_per_orbit=sats_per_orbit,
-            altitude_km=550,
+            orbital_planes=orbits,
+            sats_per_plane=sats_per_orbit,
+            altitude_km=1000,
             inclination_rad=inclination_rad,
         )
 
         append!(
             propagators,
-            [Propagators.init(Val(:SGP4), tle) for tle in tles]
-        )  
+            [Propagators.init(Val(:SGP4), tle) for tle ∈ tles]
+        )
     end
     return propagators
 end
@@ -131,10 +136,13 @@ Create a link between two nodes if the pairwise conditions are met.
 - `Union{Link, Nothing}`: The created link if conditions are met,
     or `nothing` otherwise.
 """
-function create_link(node1::Node, node2::Node, pairwise_fns::Vector{Function}; kwargs...)
-    for pairwise_fn in pairwise_fns
+function create_link(node1::Node, node2::Node, pairwise_fns::Vector{<:Function}; kwargs...)
+    for pairwise_fn ∈ pairwise_fns
         if pairwise_fn(node1, node2)
-            return Link(node1, node2, FreespaceChannel(node1.obj, node2.obj; kwargs...))
+            channel::Union{FreespaceChannel,Nothing} = FreespaceChannel(node1.obj, node2.obj; kwargs...)
+            if (!isnothing(channel))
+                return Link(node1, node2, channel)
+            end
         end
     end
     return nothing
@@ -153,8 +161,8 @@ other is a ground station.
   `false` otherwise.
 """
 function downlink_pairwise_fn(node1::Node, node2::Node)
-    return ((node1.label.type == NodeTypes.sat && node2.label.type == NodeTypes.gs)
-        || (node1.label.type == NodeTypes.gs && node2.label.type == NodeTypes.sat))
+    return ((node1.label.type == satellite && node2.label.type == ground_station) ||
+            (node1.label.type == ground_station && node2.label.type == satellite))
 end
 
 """
@@ -168,7 +176,7 @@ Inter-satellite pairwise function that checks if both nodes are satellites.
 - `Bool`: `true` if both nodes are satellites, `false` otherwise.
 """
 function intersat_pairwise_fn(node1::Node, node2::Node)
-    return node1.label.type == NodeTypes.sat && node2.label.type == NodeTypes.sat
+    return node1.label.type == satellite && node2.label.type == satellite
 end
 
 """
@@ -185,7 +193,7 @@ function default_evaluation_fn(links::Vector{Link})
     if isempty(links)
         return 0.0
     end
-    return sum(1 - total_loss(link.channel) for link in links)
+    return sum(1 - total_loss(link.channel) for link ∈ links)
 end
 
 """
@@ -200,8 +208,8 @@ Perform a single time step of the simulation, applying the evaluation function.
 # Returns
 - The result of the evaluation function.
 """
-function simulate_step(;
-    pairwise_fns::Vector{Function},
+function simulate_step(
+    pairwise_fns::Vector{<:Function},
     evaluation_fn::Function,
     nodes::Vector{Node},
     time::Float64;
@@ -211,12 +219,12 @@ function simulate_step(;
 )
     # get links for all valid pairs of nodes
     links = Link[]
-    for i in 1:length(nodes)
-        for j in (i+1):length(nodes)
+    for i ∈ 1:length(nodes)
+        for j ∈ (i+1):length(nodes)
             link = create_link(
                 nodes[i],
                 nodes[j],
-                pairwise_fns=pairwise_fns,
+                pairwise_fns,
                 time=time,
                 transmitter_diameter_m=tx_aperture_m,
                 receiver_diameter_m=rx_aperture_m,
@@ -227,7 +235,6 @@ function simulate_step(;
             end
         end
     end
-
     # apply the evaluation function to the current state of the channels
     return evaluation_fn(links)
 end
@@ -239,7 +246,7 @@ function simulate(
     nodes::Vector{Node},
     duration_s::Int,
     step_s::Int;
-    pairwise_fns::Vector{Function}=[downlink_pairwise_fn],
+    pairwise_fns::Vector{<:Function}=[downlink_pairwise_fn],
     evaluation_fn::Function=default_evaluation_fn,
     tx_aperture_m::Float64=0.6,
     rx_aperture_m::Float64=0.6,
@@ -248,13 +255,14 @@ function simulate(
     # collect metrics at each time step
     metrics = []
 
-    for t in 0:step_s:duration_s
+    for t ∈ 0.0:step_s:duration_s
         # evaluate the current state of the network
+        println("Simulating time step $t seconds...")
         push!(metrics, simulate_step(
-            nodes=nodes,
-            pairwise_fns=pairwise_fns,
-            evaluation_fn=evaluation_fn,
-            time=t,
+            pairwise_fns,
+            evaluation_fn,
+            nodes,
+            t,
             tx_aperture_m=tx_aperture_m,
             rx_aperture_m=rx_aperture_m,
             wavelength_nm=wavelength_nm,
