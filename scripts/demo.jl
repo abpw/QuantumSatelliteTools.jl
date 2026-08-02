@@ -9,10 +9,7 @@ using QuantumSatelliteTools.GenerateGroundStations: generate_equispaced_gses
 using QuantumSatelliteTools.GenerateSatellites: generate_regular_array_TLEs
 using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 using QuantumSatelliteTools.LossCalculation: total_loss
-
-# Ground stations are represented as (latitude_rad, longitude_rad) tuples.
-const GroundStation = Tuple{Float64, Float64}
-const Propagator = OrbitPropagatorSgp4{Float64, Float64}
+using QuantumSatelliteTools.Simulator: GroundStation, Propagator
 
 """
 Build a simple synthetic constellation and initialize SGP4 propagators.
