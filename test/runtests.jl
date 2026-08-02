@@ -191,7 +191,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
             # Mean motion should match analytical value for 500 km altitude
             altitude_km = 500
-            n_expected = seconds_per_day * sqrt(G * earth_mass_kg / ( (altitude_km*1000 + semimajor_radius)^3 )) / (2*π)
+            n_expected = seconds_per_day * sqrt(G * earth_mass_kg / ((altitude_km*1000 + semimajor_radius)^3)) / (2*π)
             @test all(isapprox(t.mean_motion, n_expected; rtol=1e-10, atol=0) for t in tles)
         end
 
@@ -203,7 +203,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
             tles = generate_regular_array_TLEs(orbital_planes=orbital_planes, sats_per_plane=sats_per_plane, altitude_km=altitude_km, inclination_rad=inc_rad, frozen_orbits=false)
 
             # Count check
-            @test length(tles) == orbits * sats_per_plane
+            @test length(tles) == orbital_planes * sats_per_plane
 
             # Inclination check (in degrees)
             @test all(isapprox(t.inclination, inc_rad/π*180; atol=1e-9) for t in tles)
@@ -213,7 +213,7 @@ using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
             @test unique_raan == [0.0, 60.0, 120.0]
 
             # Mean motion matches altitude
-            n_expected = seconds_per_day * sqrt(G * earth_mass_kg / ( (altitude_km*1000 + semimajor_radius)^3 )) / (2*π)
+            n_expected = seconds_per_day * sqrt(G * earth_mass_kg / ((altitude_km*1000 + semimajor_radius)^3)) / (2*π)
             @test all(isapprox(t.mean_motion, n_expected; rtol=1e-10, atol=0) for t in tles)
 
             # Name formatting
