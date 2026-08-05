@@ -18,6 +18,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/abpw/QuantumSatelliteTools.jl",
+    repo="github.com/abpw/QuantumSatelliteTools.jl.git",
     devbranch="main",
 )
