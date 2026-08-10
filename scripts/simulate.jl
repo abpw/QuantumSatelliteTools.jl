@@ -1,19 +1,14 @@
 using Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
 
-
-using Statistics: mean
-
-
-using SimpleWeightedGraphs: SimpleWeightedGraph, get_weight
-using Graphs: neighbors, vertices
 using DataStructures: PriorityQueue
+using Graphs: neighbors, vertices
+using SimpleWeightedGraphs: SimpleWeightedGraph, get_weight
 
-using QuantumSatelliteTools.LossCalculation: total_loss_dB, swapping_loss_dB, dB_to_prob
-using QuantumSatelliteTools.Simulator: build_optimized_constellation, Node, Link, simulate,
-    NodeLabel, satellite, ground_station
-using QuantumSatelliteTools.GenerateGroundStations: generate_grid_gses,
-    _generate_population_center_gses
+using QuantumSatelliteTools.GenerateGroundStations
+using QuantumSatelliteTools.LossCalculation
+using QuantumSatelliteTools.Simulator
+using QuantumSatelliteTools.VisualizeMap
 
 """
 A pair of nodes, for indexing into a path dictionary.
@@ -48,6 +43,8 @@ struct Path
 end
 
 """
+    generate_population_center_gs_weights(n::Int)
+
 Generate population ground station nodes with weights.
 
 # Arguments
@@ -72,6 +69,8 @@ function generate_population_center_gs_weights(n::Int)
 end
 
 """
+    grid_gs_importance_evaluation_fn(links::Vector{Link})
+
 Custom evaluation function for the grid ground station selection experiment.
 Calculates the "importance" of grid ground stations based on their "helpfulness" in
 connecting population centers.
@@ -87,9 +86,6 @@ function grid_gs_importance_evaluation_fn(links::Vector{Link})
     all_nodes = unique(vcat([link.node1 for link ∈ links], [link.node2 for link ∈ links]))
     node_to_idx = Dict(node.id => i for (i, node) ∈ enumerate(all_nodes))
     idx_to_node = all_nodes
-
-    println("sample link loss: $(total_loss_dB(links[1].channel))")
-    return
 
     # Construct simple weighted graph representation of the network
     sources::Vector{Int} = [node_to_idx[link.node1.id] for link ∈ links]
@@ -110,7 +106,7 @@ function grid_gs_importance_evaluation_fn(links::Vector{Link})
     paths::Dict{NodePair,Path} = Dict{NodePair,Path}()
 
     # For each population center, perform a modified Dijkstra's to find the
-    # paths to other population centers with the highest transmissivity
+    # paths to other population centers with the highest transmissiity
     for (i, pop_ctr_gs) ∈ enumerate(pop_ctr_gses)
         # Initialize Dijkstra's algorithm data structures
         dists::Vector{Float64} =
@@ -130,16 +126,17 @@ function grid_gs_importance_evaluation_fn(links::Vector{Link})
         while !isempty(priority_queue)
             curr_node_idx, curr_dist = popfirst!(priority_queue)
             curr_node = idx_to_node[curr_node_idx]
-            node_cost = (
-                curr_node ≠ pop_ctr_gs && curr_node.label.type == ground_station
-                ? swapping_loss_dB()
-                : 0.0
-            )
+            node_cost =
+                curr_node ≠ pop_ctr_gs && curr_node.label.type == ground_station ?
+                swapping_loss_dB() :
+                0.0
 
             for neighbor_idx ∈ neighbors(graph, curr_node_idx)
-                # println("curr_dist: $(dB_to_prob(curr_dist)), node_cost: $(dB_to_prob(node_cost)), edge_weight: $(dB_to_prob(get_weight(graph, curr_node_idx, neighbor_idx)))")
-                new_dist = curr_dist + node_cost + get_weight(graph, curr_node_idx, neighbor_idx)
-                # println("New dist: $(dB_to_prob(new_dist))")
+                new_dist =
+                    curr_dist +
+                    node_cost +
+                    get_weight(graph, curr_node_idx, neighbor_idx)
+
                 if new_dist < dists[neighbor_idx]
                     dists[neighbor_idx] = new_dist
                     prevs[neighbor_idx] = curr_node
@@ -176,34 +173,71 @@ function grid_gs_importance_evaluation_fn(links::Vector{Link})
     end
 
     # Use path matrix to calculate importance of each grid ground station
-    grid_gs_importance::Dict{Int,Float64} = Dict{Int,Float64}()
+    grid_gs_importance::Dict{Node,Float64} = Dict{Node,Float64}()
     for (pair::NodePair, path::Path) ∈ paths
         # Calculate importance of path
         path_weight = (pair.node1.weight + pair.node2.weight) / 2.0
         path_transmissivity = 1 - dB_to_prob(path.loss_dB)
-        println("Path transmissivity: $path_transmissivity")
         path_importance = path_weight * path_transmissivity
 
         # Assign importance to each grid ground station in the path
         for inter_node::Node ∈ path.inter_nodes
             if (inter_node.label.type == ground_station && "aux" ∈ inter_node.label.tags)
-                grid_gs_importance[inter_node.id] = get(grid_gs_importance, inter_node.id, 0.0) + path_importance
+                grid_gs_importance[inter_node] =
+                    get(grid_gs_importance, inter_node, 0.0) +
+                    path_importance
             end
         end
     end
 
     # Return the importance scores for each grid ground station
     return grid_gs_importance
-
-    # Do modified Dijkstra's to find paths between population centers
-    # Calculate importance of each path by averaging the weights of the population centers it connects
-    # Assign importance to each grid ground station based on the paths it is part of
-    # For each aux ground station in a given path, add the path's importance to the station's total importance score
-    # Additional considerations:
-    # Consider weighting paths by their transmissivity to reflect the quality of the connection they provide
 end
 
 """
+    visualize_gs_importances(spacing::Int, metrics::Vector{Dict{Node,Float64}}, save_path::String)
+
+Process grid ground station selection experiment results and visualize them.
+
+# Arguments
+- `spacing::Int`: The spacing of the grid ground stations in kilometers.
+- `metrics::Vector{Dict{Node,Float64}}`: A vector of grid ground station importance mappings.
+- `save_path::String`: The path to save the plot.
+
+# Side Effects
+- Generates and saves a plot of the grid ground station importance scores.
+
+# Returns
+- Nothing
+"""
+function visualize_gs_importances(
+    spacing::Int,
+    pop_ctr_gses::Vector{Tuple{GroundStation,Float64}},
+    metrics::Vector{Dict{Node,Float64}}
+)
+    # Aggregate the importance scores for each grid ground station across all time steps
+    importances = Dict{GroundStation,Float64}()
+    for time_step ∈ metrics
+        for (node, importance) ∈ time_step
+            importances[node.obj] = get(importances, node.obj, 0.0) + importance
+        end
+    end
+
+    # Remove grid ground stations with zero importance
+    filtered_importances =
+        Dict(gs => importance for (gs, importance) ∈ importances if importance > 0.0)
+
+    # Plot the importance scores on a world map
+    plot_gs_selections(
+        spacing,
+        pop_ctr_gses,
+        filtered_importances
+    )
+end
+
+"""
+    main(; duration_s=30, step_s=30)
+
 Perform the grid ground station selection experiment.
 
 # Arguments
@@ -215,7 +249,7 @@ Perform the grid ground station selection experiment.
 """
 function main(;
     duration_s=30,
-    step_s=30,
+    step_s=29,
 )
     # Build a constellation of 1000 satellites based on optimized parameters
     println("Building optimized constellation of 1000 satellites...")
@@ -228,14 +262,14 @@ function main(;
     # Generate ground station grids with 200, 400, and 800 km spacing.
     println("Generating ground station grids with 200, 400, and 800 km spacing...")
     grid_gses = Dict(
-        200 => generate_grid_gses(equatorial_distance_km=200),
-        400 => generate_grid_gses(equatorial_distance_km=400),
-        800 => generate_grid_gses(equatorial_distance_km=800),
+        200 => generate_grid_gses(equatorial_distance_km=200, force_land=true),
+        400 => generate_grid_gses(equatorial_distance_km=400, force_land=true),
+        800 => generate_grid_gses(equatorial_distance_km=800, force_land=true),
     )
 
     # Perform experiments for each grid scenario
     println("Performing experiments for each grid scenario...")
-    for (spacing, aux_gses) ∈ grid_gses
+    for (spacing, aux_gses::Vector{GroundStation}) ∈ grid_gses
         println("Simulating scenario with grid spacing of $spacing km...")
 
         # Construct the nodes for this scenario
@@ -259,14 +293,21 @@ function main(;
 
         # Simulate the scenario and collect metrics
         println("Beginning simulation run for grid spacing $spacing km...")
-        metrics = simulate(
+        metrics::Vector{Dict{Node,Float64}} = simulate(
             nodes,
             duration_s,
             step_s,
             evaluation_fn=grid_gs_importance_evaluation_fn,
         )
 
-        println("Sample metric: $(metrics[end])")
+        # Visualize the results for this scenario
+        println("Visualizing results for grid spacing $spacing km...")
+        visualize_gs_importances(
+            spacing,
+            population_center_gses,
+            metrics
+        )
     end
-
 end
+
+main()
