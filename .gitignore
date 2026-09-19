@@ -6,3 +6,6 @@
 /scripts/aux_gses.txt
 /data
 .vscode
+.venv/
+__pycache__/
+*.egg-info/

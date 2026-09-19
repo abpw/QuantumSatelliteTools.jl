@@ -245,13 +245,14 @@ Simulate the constellation performance over a specified duration and time step.
 """
 function simulate(
     nodes::Vector{Node},
-    duration_s::Int,
-    step_s::Int;
+    duration_s::Real,
+    step_s::Real;
     pairwise_fns::Vector{<:Function}=[downlink_pairwise_fn],
     evaluation_fn::Function=default_evaluation_fn,
     tx_aperture_m::Float64=0.6,
     rx_aperture_m::Float64=0.6,
     wavelength_nm::Float64=1550.0,
+    verbose::Bool=true,
 )
     sat_index = findfirst(node -> node.label.type == satellite, nodes)
     epoch = isnothing(sat_index) ? 0.0 : nodes[sat_index].obj.sgp4d.epoch
@@ -260,7 +261,7 @@ function simulate(
 
     for t ∈ 0.0:step_s:duration_s
         # evaluate the current state of the network
-        println("Simulating time step $t seconds...")
+        verbose && println("Simulating time step $t seconds...")
         push!(metrics, simulate_step(
             pairwise_fns,
             evaluation_fn,

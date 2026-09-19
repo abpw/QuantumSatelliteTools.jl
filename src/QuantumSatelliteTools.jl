@@ -5,7 +5,7 @@ using SatelliteToolboxTle, SatelliteToolboxPropagators, SatelliteToolboxTransfor
 using SatelliteAnalysis
 using Downloads, CSV, Random, Dates, StaticArrays
 
-export AstronomyGeometry, GenerateSatellites, GenerateGroundStations, FreespaceChannels, LossCalculation
+export AstronomyGeometry, GenerateSatellites, GenerateGroundStations, FreespaceChannels, LossCalculation, Optimization
 
 module AstronomyGeometry
 export semimajor_radius, semiminor_radius, G, earth_mass_kg, seconds_per_day, equatorial_circumference_km, sin_60
@@ -20,6 +20,7 @@ end
 
 module GenerateGroundStations
 export is_within_min_distance, is_land
+export generate_census_grid_gses
 export generate_population_center_gses, _generate_population_center_gses, generate_city_gses, generate_random_gses, generate_equispaced_gses, generate_grid_gses
 include("GenerateGroundStations.jl")
 end
@@ -42,6 +43,12 @@ end
 module Simulator
 export build_optimized_constellation, simulate, Node, Link, NodeLabel, satellite, ground_station, GroundStation, Propagator
 include("Simulator.jl")
+end
+
+module Optimization
+export Shell, GroundStationLayout, PopulationLayout, RandomLayout, EquispacedLayout, GridLayout, CensusGridLayout
+export Matching, Unconstrained, Constrained, DualDownlink, generate_ground_stations, evaluate_constellation
+include("Optimization.jl")
 end
 
 end

@@ -6,6 +6,8 @@ using QuantumSatelliteTools.AstronomyGeometry
 using QuantumSatelliteTools.GenerateSatellites: generate_regular_array_TLEs
 using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
 
+include("optimization.jl")
+
 @testset "QuantumSatelliteTools.jl" begin
     @testset "AstronomyGeometry.jl" begin
         #using QuantumSatelliteTools.AstronomyGeometry

@@ -1,0 +1,10 @@
+{
+    "julia": "1.11 - 1.12",
+    "packages": {
+        "QuantumSatelliteTools": {
+            "uuid": "d86fc70c-de9e-43b7-b4e7-3a87415113cf",
+            "path": "..",
+            "dev": true
+        }
+    }
+}

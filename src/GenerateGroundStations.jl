@@ -8,6 +8,8 @@ using ..AstronomyGeometry: gs_gs_distance, GS, equatorial_circumference_km, sin_
 
 const city_data_file_str = joinpath(@__DIR__, "../databases/worldcities.csv")
 
+include("CensusGrid.jl")
+
 """
 Check if a given (lat, lon) is at least `min_distance` away from all ground stations in the list.
 
@@ -171,7 +173,7 @@ Generate randomly placed ground stations using uniform sampling on a sphere.
 - `Vector`: Generated `(geodetic latitude in radians, geodetic longitude in radians)` tuples.
 """
 function generate_random_gses(n::Int; other_gses::Vector=[], timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, force_land::Bool=false, verbose::Bool=false, seed=false)
-    if seed == false
+    if seed === false
         seed = rand(0:2^31-1)
     end
     if verbose
