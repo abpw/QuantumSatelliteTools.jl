@@ -66,7 +66,7 @@ Create a FreespaceChannel between a satellite and a ground station.
 # Returns
 - `FreespaceChannel` instance or `nothing` if ground station is not visible.
 """
-function FreespaceChannel(sat::OrbitPropagatorSgp4{Float64, Float64}, gs::GS; transmitter_diameter_m::Number=60, receiver_diameter_m::Number=60, wavelength_nm::Number=1550, time::Union{Number,DateTime,Missing}=missing, conditions::Conditions=clear, min_θ=deg2rad(20))
+function FreespaceChannel(sat::OrbitPropagatorSgp4{Float64, Float64}, gs::GS; transmitter_diameter_m::Number=0.6, receiver_diameter_m::Number=0.6, wavelength_nm::Number=1550, time::Union{Number,DateTime,Missing}=missing, conditions::Conditions=clear, min_θ=deg2rad(20))
     if time === missing
         time = sat.sgp4d.epoch
     end
@@ -74,7 +74,7 @@ function FreespaceChannel(sat::OrbitPropagatorSgp4{Float64, Float64}, gs::GS; tr
         time = datetime2julian(time)
     end
     gs_height = length(gs) > 2 ? gs[3] : 0
-    sat_sv = Propagators.propagate!(sat, time - sat.sgp4d.epoch, OrbitStateVector)
+    sat_sv = Propagators.propagate!(sat, (time - sat.sgp4d.epoch) * seconds_per_day, OrbitStateVector)
     sat_pos = eci_to_ecef(sat_sv.r, time=time)
     if !is_ground_facility_visible(sat_pos, gs[1], gs[2], gs_height, min_θ)
         return nothing
@@ -108,18 +108,18 @@ Create a FreespaceChannel between two satellites.
 # Returns
 - `FreespaceChannel` instance or `nothing` if satellites are not visible to each other.
 """
-function FreespaceChannel(sat1::OrbitPropagatorSgp4{Float64, Float64}, sat2::OrbitPropagatorSgp4{Float64, Float64}; transmitter_diameter_m::Number=60, receiver_diameter_m::Number=60, wavelength_nm::Number=1550, time::Union{Number,DateTime,Missing}=missing, conditions::Conditions=clear)
+function FreespaceChannel(sat1::OrbitPropagatorSgp4{Float64, Float64}, sat2::OrbitPropagatorSgp4{Float64, Float64}; transmitter_diameter_m::Number=0.6, receiver_diameter_m::Number=0.6, wavelength_nm::Number=1550, time::Union{Number,DateTime,Missing}=missing, conditions::Conditions=clear)
     if time === missing
-        time = sat.sgp4d.epoch
+        time = max(sat1.sgp4d.epoch, sat2.sgp4d.epoch)
     end
     if typeof(time) == DateTime
         time = datetime2julian(time)
     end
 
-    sat1_sv = Propagators.propagate!(sat1, time - sat1.sgp4d.epoch, OrbitStateVector)
+    sat1_sv = Propagators.propagate!(sat1, (time - sat1.sgp4d.epoch) * seconds_per_day, OrbitStateVector)
     sat1_pos = eci_to_ecef(sat1_sv.r, time=time)
 
-    sat2_sv = Propagators.propagate!(sat2, time - sat2.sgp4d.epoch, OrbitStateVector)
+    sat2_sv = Propagators.propagate!(sat2, (time - sat2.sgp4d.epoch) * seconds_per_day, OrbitStateVector)
     sat2_pos = eci_to_ecef(sat2_sv.r, time=time)
 
     visibility_check = ellipsoid_line_intersection(semimajor_radius, semiminor_radius, sat1_pos, sat2_pos, only_between=true)

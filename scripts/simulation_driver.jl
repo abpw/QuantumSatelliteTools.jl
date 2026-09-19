@@ -2,7 +2,7 @@ using SatelliteToolboxTle
 using QuantumSatelliteTools.GenerateSatellites
 using QuantumSatelliteTools.GenerateGroundStations
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
-using QuantumSatelliteTools.AstronomyGeometry: GS
+using QuantumSatelliteTools.AstronomyGeometry: GS, seconds_per_day
 using SimpleWeightedGraphs: SimpleWeightedGraph, get_weight
 using Graphs: neighbors, vertices, nv
 using QuantumSatelliteTools.FreespaceChannels: FreespaceChannel
@@ -283,7 +283,7 @@ function simulate(
     println("Beginning simulation")
     for time_elapsed ∈ ProgressBar(0:interval_s:duration_s-1)
         graph = make_graph(propagators, vcat(gses, aux_gses), node_map,
-                           epoch+time_elapsed, experiment)
+                           epoch + time_elapsed / seconds_per_day, experiment)
         all_pairs_path_probs!(graph, types, experiment, parent_matrix)
         push!(time_transmissivities,
              (time_elapsed, aggregate_paths_probs(parent_matrix, length(gses))))

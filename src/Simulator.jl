@@ -1,4 +1,5 @@
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
+using ..AstronomyGeometry: seconds_per_day
 using ..GenerateSatellites: generate_regular_array_TLEs
 using ..FreespaceChannels: FreespaceChannel, AbstractChannel
 using ..LossCalculation: total_loss
@@ -203,7 +204,7 @@ Perform a single time step of the simulation, applying the evaluation function.
 - `nodes`: vector of nodes (satellites and ground stations).
 - `evaluation_fn`: function that takes the current set of freespace channels
     and their endpoints and returns a metric.
-- `time`: current time step in seconds.
+- `time`: current time as a Julian date.
 
 # Returns
 - The result of the evaluation function.
@@ -252,6 +253,8 @@ function simulate(
     rx_aperture_m::Float64=0.6,
     wavelength_nm::Float64=1550.0,
 )
+    sat_index = findfirst(node -> node.label.type == satellite, nodes)
+    epoch = isnothing(sat_index) ? 0.0 : nodes[sat_index].obj.sgp4d.epoch
     # collect metrics at each time step
     metrics = []
 
@@ -262,7 +265,7 @@ function simulate(
             pairwise_fns,
             evaluation_fn,
             nodes,
-            t,
+            epoch + t / seconds_per_day,
             tx_aperture_m=tx_aperture_m,
             rx_aperture_m=rx_aperture_m,
             wavelength_nm=wavelength_nm,
