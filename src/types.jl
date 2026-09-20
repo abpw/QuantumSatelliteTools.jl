@@ -8,12 +8,12 @@ using SatelliteToolboxPropagators: OrbitPropagatorSgp4
 ############################################################################################
 
 """
-    const input_GS
+    InputGS
 
 Ground station coordinates with any Real precision.
 """
 
-const input_GS = Union{
+const InputGS = Union{
     Tuple{<:Real,<:Real},
     Tuple{<:Real,<:Real,<:Real},
     SVector{2,<:Real},
@@ -21,7 +21,7 @@ const input_GS = Union{
 }
 
 """
-    const GS
+    GS
 
 Ground station coordinates with Float64 precision.
 """
@@ -34,7 +34,7 @@ const GS = Union{
 }
 
 """
-    const Point3D
+    Point3D
 
 A 3D point.
 """
@@ -90,14 +90,14 @@ Lighting condition of a point relative to the Sun and Earth's shadow.
 end
 
 """
-    const Propagator
+    Propagator
     
 Orbit propagator using SGP4 with Float64 precision.
 """
 const Propagator = OrbitPropagatorSgp4{Float64,Float64}
 
 """
-    @enum NodeTypes
+    NodeTypes
 
 Roles or types of a node in the quantum network.
 
