@@ -1,4 +1,4 @@
-using ..constants: LAND_SEA_MASK
+using ..constants: SECONDS_PER_DAY, LAND_SEA_MASK
 using ..types: Point3D, InputGS, GS, Node, satellite, ground_station
 
 ############################################################################################
@@ -61,6 +61,24 @@ Parse `lat` and `lon` [deg] to a ground station tuple [rad].
 """
 function _parse_lat_lon(lat_str::AbstractString, lng_str::AbstractString)
     return (deg2rad(parse(Float64, lat_str)), deg2rad(parse(Float64, lng_str)))
+end
+
+"""
+    JD_to_seconds(jd::Real) -> Float64
+
+Convert Julian days to seconds.
+"""
+function JD_to_seconds(jd::Real)
+    return jd * SECONDS_PER_DAY
+end
+
+"""
+    seconds_to_JD(seconds::Real) -> Float64
+
+Convert seconds to Julian days.
+"""
+function seconds_to_JD(seconds::Real)
+    return seconds / SECONDS_PER_DAY
 end
 
 ############################################################################################
