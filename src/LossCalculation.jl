@@ -1,87 +1,58 @@
 using ..FreespaceChannels: FreespaceChannel
+using ..helpers: dB_to_prob, prob_to_dB
 
 """
-Calculate the beam waist radius for a channel.
+    waist_radius(channel::FreespaceChannel) -> Float64
 
-# Arguments
-- `channel::FreespaceChannel`: A freespace channel.
-
-# Returns
-- The half beam divergence (in radians).
+Calculate beam waist radius [m] for a `channel`.
 """
 function waist_radius(channel::FreespaceChannel)
     # w₀ =  122λ/Dₜ
-    1.22 * (channel.wavelength_nm * 1e-9) / channel.transmitter_diameter_m
+    return 1.22 * (channel.wavelength_nm * 1e-9) / channel.transmitter_diameter_m
 end
 
 """
-Convert a loss value from decibels to probability.
+    geometric_loss_dB(channel::FreespaceChannel) -> Float64
 
-# Arguments
-- `loss_dB::Number`: The loss in decibels.
-
-# Returns
-- The loss as a probability (0 - 1).
-"""
-function dB_to_prob(loss_dB::Number)
-    1 - 10^(loss_dB / -10)
-end
-
-"""
-Convert a loss value from probability to decibels.
-
-# Arguments
-- `loss_prob::Number`: The loss as a probability (0 - 1).
-
-# Returns
-- The loss in decibels.
-"""
-function prob_to_dB(loss_prob::Number)
-    -10 * log10(1 - loss_prob)
-end
-
-"""
-Calculate the geometric loss for a channel.
-
-# Arguments
-- `channel::FreespaceChannel`: A freespace channel.
-
-# Returns
-- The total geometric loss.
+Calculate geometric loss [dB] for a `channel`.
 """
 function geometric_loss_dB(channel::FreespaceChannel)
-    20*log10((channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) / channel.receiver_diameter_m)
+    return 20*log10(
+        (channel.transmitter_diameter_m + channel.distance_m * waist_radius(channel)) /
+            channel.receiver_diameter_m,
+    )
 end
 
 """
-Calculate the distance over which the channel passes through the atmosphere.
+    atmosphere_distance(
+        channel::FreespaceChannel;
+        atmosphere_height_m::Float64=18e3
+    ) -> Float64
 
-# Arguments
-- `channel::FreespaceChannel`: A freespace channel.
-- `atmosphere_height_m`: The altitude of the boundary of the atmosphere in meters.
-
-# Returns
-- The distance that the channel passes through the atmosphere in meters.
+Calculate the distance [m] over which the `channel` passes through the atmosphere, which is
+bounded by `atmosphere_height_m` [m].
 """
-function atmosphere_distance(channel::FreespaceChannel, atmosphere_height_m::Float64=18e3)
+function atmosphere_distance(channel::FreespaceChannel; atmosphere_height_m::Float64=18e3)
     if channel.elevation_angle_rad == 0
-        atmospheric_distance = 0
+        atm_dist = 0
     else
-        relative_elevation = channel.distance_m * sin(channel.elevation_angle_rad)
-        atmospheric_elevation = min(relative_elevation, atmosphere_height_m - channel.min_altitude_m)
-        atmospheric_distance = atmospheric_elevation / sin(channel.elevation_angle_rad)
+        relative_elev = channel.distance_m * sin(channel.elevation_angle_rad)
+        atm_elev = min(
+            relative_elev, atmosphere_height_m - channel.min_altitude_m
+        )
+        atm_dist = atm_elev / sin(channel.elevation_angle_rad)
     end
-    atmospheric_distance
+    return atm_dist
 end
 
 """
-Calculate the atmospheric loss for a channel.
+    atmospheric_loss_dB(channel::FreespaceChannel) -> Float64
 
-# Arguments
-- `channel::FreespaceChannel`: A freespace channel.
+Calculate atmospheric loss [dB] for a `channel`.
 
-# Returns
-- The total atmospheric loss.
+# Throws
+
+  - `ErrorException`: If the wavelength is not one of the defined values.
 """
 function atmospheric_loss_dB(channel::FreespaceChannel)
     atmospheric_distance = atmosphere_distance(channel)
@@ -95,7 +66,7 @@ function atmospheric_loss_dB(channel::FreespaceChannel)
     elseif channel.wavelength_nm == 1550
         molecular_absorption = 0.01
     else
-        throw("Molecular absorption is not defined for other wavelengths")
+        throw(error("Molecular absorption is not defined for other wavelengths"))
     end
 
     return molecular_absorption * (atmospheric_distance / 1000)
@@ -123,16 +94,11 @@ function atmospheric_loss_dB(channel::FreespaceChannel)
 end
 
 """
-Calculate the pointing loss for a channel.
+    pointing_loss_dB(channel::FreespaceChannel; pointing_jitter::Real=2.0) -> Float64
 
-# Arguments
-- `channel::FreespaceChannel`: A freespace channel.
-- `pointing_jitter::Number`: The pointing jitter in microradians (default 5).
-
-# Returns
-- The pointing loss in decibels (dB), where larger values mean more loss.
+Calculate pointing loss [dB] for a `channel`, with a `pointing_jitter` [μrad].
 """
-function pointing_loss_dB(channel::FreespaceChannel, pointing_jitter::Float64=5.0)
+function pointing_loss_dB(channel::FreespaceChannel; pointing_jitter::Real=2.0)
     # Pointing transmittance factor (0-1)
     η_pnt = exp(-8 * (pointing_jitter * 1e-6)^2 / waist_radius(channel)^2)
     # Convert transmittance to loss in dB so it can be added to other dB losses.
@@ -140,52 +106,38 @@ function pointing_loss_dB(channel::FreespaceChannel, pointing_jitter::Float64=5.
 end
 
 """
-Calculate the reflector loss for a satellite.
+    reflector_loss() -> Float64
 
-# Returns
-- The reflector loss for one satellite in decibels.
+Calculate reflector loss [prob] for a satellite.
 """
 function reflector_loss()
-    # decibels_to_probability(5.854678746311231)
     # 5% loss from reflector paper
-    0.05
+    return 0.05
 end
 
 """
-Calculate the swapping loss for a ground station as a probability.
+    swapping_loss(; memory_read_write_loss::Real=0.8) -> Float64
 
-# Arguments
-- `memory_read_write_loss::Number`: Read/write loss of the quantum memory as a probability.
-
-# Returns
-- The swapping loss for one ground station as a probability.
+Calculate entanglement swapping loss [prob] with a `memory_read_write_loss` [prob].
 """
-function swapping_loss(memory_read_write_loss::Float64=0.8)
+function swapping_loss(; memory_read_write_loss::Real=0.8)
     # 0.5 is Bell state measurement
-    0.5 * memory_read_write_loss
+    return 0.5 * memory_read_write_loss
 end
 
 """
-Calculate the swapping loss for a ground station in decibels.
+    swapping_loss_dB(;memory_read_write_loss::Real=0.8) -> Float64
 
-# Arguments
-- `memory_read_write_loss::Number`: Read/write loss of the quantum memory as a probability.
-
-# Returns
-- The swapping loss for one ground station in decibels.
+Calculate entanglement swapping loss [dB] with a `memory_read_write_loss` [prob].
 """
-function swapping_loss_dB(memory_read_write_loss::Float64=0.8)
-    return prob_to_dB(swapping_loss(memory_read_write_loss))
+function swapping_loss_dB(; memory_read_write_loss::Real=0.8)
+    return prob_to_dB(swapping_loss(; memory_read_write_loss=memory_read_write_loss))
 end
 
 """
-Calculate total loss in a freespace channel.
+    total_loss_dB(channel::FreespaceChannel) -> Float64
 
-# Arguments
-- `channel::FreespaceChannel`: A freespace channel.
-
-# Returns
-- The total loss in decibels.
+Calculate total loss [dB] in a freespace `channel`.
 """
 function total_loss_dB(channel::FreespaceChannel)
     # L_tot = L_geo + L_atm + L_pnt
@@ -197,14 +149,10 @@ function total_loss_dB(channel::FreespaceChannel)
 end
 
 """
-Calculate total loss in a freespace channel as a probability.
+    total_loss(channel::FreespaceChannel) -> Float64
 
-# Arguments
-- `channel::FreespaceChannel`: A freespace channel.
-
-# Returns
-- The total loss as a probability (0 - 1).
+Calculate total loss [prob] in a freespace `channel`.
 """
 function total_loss(channel::FreespaceChannel)
-    dB_to_prob(total_loss_dB(channel))
+    return dB_to_prob(total_loss_dB(channel))
 end

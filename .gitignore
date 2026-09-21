@@ -6,3 +6,4 @@
 /scripts/aux_gses.txt
 /data
 .vscode
+.JuliaFormatter.toml
