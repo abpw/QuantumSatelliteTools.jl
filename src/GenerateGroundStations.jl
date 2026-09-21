@@ -1,260 +1,397 @@
-using GeoDatasets
-using CSV
 using Random: Xoshiro, rand, seed!
-using ..AstronomyGeometry: gs_gs_distance, GS, equatorial_circumference_km, sin_60
+using Unicode: normalize
+
+using CSV: Rows
+
+using ..constants: EQUATORIAL_CIRCUMFERENCE_KM, SIN_60, LAND_SEA_MASK
+using ..helpers: _to_float64, _parse_lat_lon
+using ..helpers: validate_non_negative_finite, _validate_timeout
+using ..helpers: is_duplicate, is_land
+using ..types: GS
+using ..AstronomyGeometry: validate_coordinates, gs_gs_distance
 
 """ City and population data from:
-@misc{Youderain_2021, title={World Cities Database}, url={https://simplemaps.com/data/world-cities}, journal={simplemaps}, author={Youderain, Chris}, year={2021}, month={Jun}}"""
-
-const city_data_file_str = joinpath(@__DIR__, "../databases/worldcities.csv")
+    @misc{
+        Youderain_2021,
+        title={World Cities Database},
+        url={https://simplemaps.com/data/world-cities},
+        journal={simplemaps},
+        author={Youderain, Chris},
+        year={2021},
+        month={Jun}
+    }
+"""
 
 """
-Check if a given (lat, lon) is at least `min_distance` away from all ground stations in the list.
+    CITY_DATA_FILE
 
-# Arguments
-- `lat::Float64`: Latitude of the new candidate location (in radians).
-- `lon::Float64`: Longitude of the new candidate location (in radians).
-- `gses::Vector`: List of existing ground station tuples.
-- `min_distance::Int`: Minimum allowed distance in kilometers.
+Path to the CSV file containing city and population data.
+
+Each row should contain at least the following fields:
+  - `city_ascii`: City name in ASCII characters.
+  - `lat`: Latitude [deg].
+  - `lng`: Longitude [deg].
+"""
+const CITY_DATA_FILE = joinpath(@__DIR__, "../databases/worldcities.csv")
+
+"""
+    GS_GENERATION_RNG
+
+Random number generator for ground station generation.
+"""
+const GS_GENERATION_RNG = Xoshiro(rand(0:(2^31-1)))
+
+"""
+    is_outside_min_distance(
+        lat::Real, lon::Real, gses::Vector, min_distance::Real
+    ) -> Bool
+
+Check if `(lat, lon)` [rad] is at least `min_distance` [km] away from all `gses`.
 
 # Returns
-- `Bool`: `true` if the new location is sufficiently far from all existing stations.
-"""
-function is_within_min_distance(lat::Float64, lon::Float64, gses::Vector, min_distance::Int)
-    new_gs = (lat, lon)
-    for gs ∈ gses
-        if gs_gs_distance(new_gs, gs) < min_distance * 1000
-            return false
-        end
-    end
-    return true
-end
+  - `Bool`: `true` if the location is sufficiently far from all stations.
 
-const 🌎 = GeoDatasets.landseamask(resolution='f', grid=1.25)
+# Throws
+  - `ArgumentError`: If inputs are invalid (non-finite, out of range).
+"""
+function is_outside_min_distance(lat::Real, lon::Real, gses::Vector, min_distance::Real)
+    validate_non_negative_finite("min_distance", min_distance)
 
-"""
-Determine whether the specified geographic coordinates fall on land.
+    coords = _to_float64(lat, lon)
+    validate_coordinates(coords)
 
-# Arguments
-- `lat::Number`: Latitude in radians.
-- `lon::Number`: Longitude in radians.
+    gses = _to_float64.(gses)
+    validate_coordinates.(gses)
 
-# Returns
-- `Bool`: `true` if the point lies on land, `false` otherwise.
-"""
-function is_land(lat::Number, lon::Number, args...)
-    lat_index = round(Int, (lat + π/2) / π * (length(🌎[2]) - 1) + 1)
-    lon_index = round(Int, (lon + π) / 2π * (length(🌎[1]) - 1) + 1)
-    if 🌎[3][lon_index, lat_index] == 1
-        return true
-    end
-    return false
-end
-"""
-Wrapper method for `is_land` that accepts a ground station tuple (geodetic latitude in radians, geodetic longitude in radians[, heignt in meters]).
-"""
-function is_land((lat, lon, args...)::GS)
-    return is_land(lat, lon)
+    return all(gs -> gs_gs_distance((lat, lon), gs) >= min_distance * 1000, gses)
 end
 
 """
-Generate ground stations at the most populous cities based on a database.
+    generate_population_center_gses(
+        n::Integer;
+        other_gses::Vector=[],
+        timeout::Union{Integer, Float64}=Inf,
+        min_distance::Real=0,
+        verbose::Bool=false,
+    ) -> Vector{GS}
+    generate_population_center_gses(
+        ::Val{:rows}, n::Integer;
+        other_gses::Vector=[],
+        timeout::Union{Integer, Float64}=Inf,
+        min_distance::Real=0,
+        verbose::Bool=false,
+    ) -> Vector
 
-# Arguments
-- `n::Int`: Number of population centers to select.
+Generate ground stations at the `n` most populous cities.
+
+The first method returns processed ground stations `[rad]`. The second method
+(`:rows` variant) returns raw CSV rows (internal use).
 
 # Keyword Arguments
-- `timeout::Union{Integer, Float64}=Inf`: Max number of rows to scan from file.
-- `min_distance::Number=0`: Minimum distance in meters required between any two stations.
-- `verbose::Bool=false`: Print messages if true.
+  - `other_gses::Vector=[]`: Existing ground stations.
+  - `timeout::Union{Integer, Float64}=Inf`: Max rows to scan.
+  - `min_distance::Real=0`: Minimum inter-station distance [km].
+  - `verbose::Bool=false`: Print messages if `true`.
 
-# generate_population_center_gses returns
-- `Vector`: A vector of `(geodetic latitude in radians, geodetic longitude in radians)` tuples for selected ground stations.
+# Returns
+  - `Vector{GS}`: Ground station coordinates [rad] (includes `other_gses`).
+  - `Vector`: CSV rows (`:rows` variant, does not include `other_gses`).
 
-# _generate_population_center_gses returns
-- `Vector`: A vector of CSV rows with all available information for selected ground stations.
+# Throws
+  - `ArgumentError`: If parameters are invalid (non-finite, out of range).
 """
-function _generate_population_center_gses(n::Int; timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, verbose::Bool=false)
-    gses = []
-    n_cities = 0
-    for (i, row) ∈ enumerate(CSV.Rows(city_data_file_str))
-        if n_cities >= n
-            return gses
-        end
-        if i > timeout
-            if verbose
-                println("Timeout reached: $n_cities out of $n population center ground stations generated")
+function generate_population_center_gses(
+    n::Integer;
+    other_gses::Vector=[],
+    timeout::Union{Integer,Float64}=Inf,
+    min_distance::Real=0,
+    verbose::Bool=false,
+)
+    rows = generate_population_center_gses(
+        Val(:rows), n;
+        other_gses,
+        timeout,
+        min_distance,
+        verbose
+    )
+    new_stations = [_parse_lat_lon(row.lat, row.lng) for row in rows]
+
+    return vcat(new_stations, other_gses)
+end
+function generate_population_center_gses(
+    ::Val{:rows},
+    n::Integer;
+    other_gses::Vector=[],
+    timeout::Union{Integer,Float64}=Inf,
+    min_distance::Real=0,
+    verbose::Bool=false,
+)
+    validate_non_negative_finite("n", n)
+    _validate_timeout(timeout)
+    validate_non_negative_finite("min_distance", min_distance)
+
+    gses::Vector{GS} = _to_float64.(other_gses)
+    validate_coordinates.(gses)
+
+    selected_rows = []
+    count = 0
+
+    for (i, row) in enumerate(Rows(CITY_DATA_FILE))
+        if count >= n || i > timeout
+            if i > timeout && verbose
+                println("Timeout: generated $count of $n population centers")
             end
-            return gses
+            return selected_rows
         end
-        lat = π/180*parse(Float64, row.lat)
-        lon = π/180*parse(Float64, row.lng)
-        if min_distance == 0 || is_within_min_distance(lat, lon, gses, min_distance)
-            push!(gses, row)
-            n_cities += 1
-        end
-    end
-end
 
-"""
-Generate ground stations at the most populous cities based on a database.
+        lat, lon = _parse_lat_lon(row.lat, row.lng)
 
-# Arguments
-- `n::Int`: Number of population centers to select.
-
-# Keyword Arguments
-- `other_gses::Vector=[]`: Existing ground stations to preserve.
-- `timeout::Union{Integer, Float64}=Inf`: Max number of rows to scan from file.
-- `min_distance::Number=0`: Minimum distance in meters required between any two stations.
-- `verbose::Bool=false`: Print messages if true.
-
-# generate_population_center_gses returns
-- `Vector`: A vector of `(geodetic latitude in radians, geodetic longitude in radians)` tuples for selected ground stations.
-
-# _generate_population_center_gses returns
-- `Vector`: A vector of CSV rows with all available information for selected ground stations.
-"""
-function generate_population_center_gses(n::Int; other_gses::Vector=[], timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, verbose::Bool=false)
-    gses = copy(other_gses)
-    return [(π/180*parse(Float64, gs.lat), π/180*parse(Float64, gs.lng)) for gs in vcat(gses, _generate_population_center_gses(n; timeout=timeout, min_distance=min_distance, verbose=verbose))]
-end
-
-"""
-Generate ground stations at specified city names.
-
-# Arguments
-- `city_names::Vector{String}`: List of city names to look for.
-
-# Keyword Arguments
-- `other_gses::Vector=[]`: Existing ground stations to preserve.
-- `verbose::Bool=false`: Print missing cities if true.
-
-# Returns
-- `Vector`: A vector of `(geodetic latitude in radians, geodetic longitude in radians)` tuples for matched cities.
-"""
-function generate_city_gses(city_names::Vector{String}; other_gses::Vector=[], verbose::Bool=false)
-    gses = copy(other_gses)
-    remaining = copy(city_names)
-    for row ∈ CSV.Rows(city_data_file_str)
-        row_city = row.city_ascii
-        if row_city ∈ remaining
-            push!(gses, (π/180*parse(Float64, row.lat), π/180*parse(Float64, row.lng)))
-            filter!(x -> x ≠ row_city, remaining)
-        end
-        if length(remaining) == 0
-            return gses
-        end
-    end
-    if verbose
-        println("The following cities were not in the database, so no ground stations were generated for them: $(join(remaining, ", "))")
-    end
-    return gses
-end
-
-const gs_generation_rng = Xoshiro(rand(0:2^31-1))
-
-"""
-Generate randomly placed ground stations using uniform sampling on a sphere.
-
-# Arguments
-- `n::Int`: Number of random stations to generate.
-
-# Keyword Arguments
-- `other_gses::Vector=[]`: Existing ground stations to preserve.
-- `timeout::Union{Integer, Float64}=Inf`: Max number of random draws before giving up.
-- `min_distance::Number=0`: Minimum separation between new and existing stations.
-- `force_land::Bool=false`: Restrict stations to land if true.
-- `verbose::Bool=false`: Print generation details if true.
-- `seed=false`: RNG seed (use false to randomly generate one).
-
-# Returns
-- `Vector`: Generated `(geodetic latitude in radians, geodetic longitude in radians)` tuples.
-"""
-function generate_random_gses(n::Int; other_gses::Vector=[], timeout::Union{Integer, Float64}=Inf, min_distance::Number=0, force_land::Bool=false, verbose::Bool=false, seed=false)
-    if seed == false
-        seed = rand(0:2^31-1)
-    end
-    if verbose
-        println("Generating random ground stations using seed $seed")
-    end
-    seed!(gs_generation_rng, seed)
-    gses = copy(other_gses)
-    num_new_gses = 0
-    while num_new_gses < n && timeout > 0
-        timeout -= 1
-        lat = acos(2rand(gs_generation_rng) - 1) - π/2
-        lon = π * (2rand(gs_generation_rng) - 1)
-        if (min_distance == 0 || is_within_min_distance(lat, lon, gses, min_distance)) && (!force_land || is_land(lat, lon))
-            num_new_gses += 1
+        if min_distance == 0 || is_outside_min_distance(lat, lon, gses, min_distance)
             push!(gses, (lat, lon))
+            push!(selected_rows, row)
+            count += 1
         end
     end
-    if timeout == 0 && verbose
-        println("Timeout reached: $num_new_gses out of $n random ground stations generated")
+
+    return selected_rows
+end
+
+"""
+    generate_city_gses(
+        city_names::Vector{String};
+        other_gses::Vector=[],
+        verbose::Bool=false
+    ) -> Vector{GS}
+
+Generate ground stations at cities specified by `city_names`.
+
+# Keyword Arguments
+  - `other_gses::Vector=[]`: Existing ground stations.
+  - `verbose::Bool=false`: Print unmatched cities if `true`.
+
+# Returns
+  - `Vector{GS}`: Ground station coordinates [rad] (includes `other_gses`).
+
+# Throws
+  - `ArgumentError`: If `other_gses` contains invalid coordinates.
+"""
+function generate_city_gses(
+    city_names::Vector{String}; other_gses::Vector=[], verbose::Bool=false
+)
+    gses::Vector{GS} = _to_float64.(other_gses)
+    validate_coordinates.(gses)
+
+    remaining = normalize.(lowercase.(city_names); stripmark=true)
+
+    for row in Rows(CITY_DATA_FILE)
+        if isempty(remaining)
+            break
+        end
+
+        row_city_normalized = normalize(lowercase(row.city_ascii))
+        if row_city_normalized ∈ remaining
+            city_gs = _parse_lat_lon(row.lat, row.lng)
+
+            if !is_duplicate(city_gs, gses)
+                push!(gses, city_gs)
+            elseif verbose
+                println("Duplicate: $(row.city_ascii) already in station list, skipping")
+            end
+
+            filter!(name -> name ≠ row_city_normalized, remaining)
+        end
     end
+
+    if verbose && !isempty(remaining)
+        println("Not found in database: $(join(remaining, ", "))")
+    end
+
     return gses
 end
 
 """
-Generate `n` approximately equispaced ground stations over the globe using a Fibonacci lattice, an algorithm that only works correctly for odd n.
+    generate_random_gses(
+        n::Integer;
+        other_gses::Vector=[],
+        timeout::Union{Integer, Float64}=Inf,
+        min_distance::Real=0,
+        force_land::Bool=false,
+        verbose::Bool=false,
+        seed::Union{Integer, AbstractString, Bool}=false,
+    ) -> Vector{GS}
 
-# Arguments
-- `n::Int`: Number of ground stations to generate.
-- `fail_on_even::Bool=true`: If true, throws an error if `n` is odd. Otherwise, sets `n=n+1`.
+Generate `n` randomly placed ground stations on a sphere.
+
+# Keyword Arguments
+  - `other_gses::Vector=[]`: Existing ground stations.
+  - `timeout::Union{Integer, Float64}=Inf`: Maximum random draws.
+  - `min_distance::Real=0`: Minimum inter-station distance [km].
+  - `force_land::Bool=false`: Restrict stations to land if `true`.
+  - `verbose::Bool=false`: Print messages if `true`.
+  - `seed::Union{Integer, AbstractString, Bool}=false`: RNG seed (use `false` for random).
 
 # Returns
-- `Vector`: A list of `(geodetic latitude in radians, geodetic longitude in radians)` tuples.
+  - `Vector{GS}`: Ground station coordinates [rad] (includes `other_gses`).
+
+# Throws
+  - `ArgumentError`: If parameters are invalid (non-finite, out of range).
 """
-function generate_equispaced_gses(n::Int; fail_on_even::Bool=true)
-    if n%2 == 0 && fail_on_even
-        throw("Fibonacci lattice algorithm only works for odd n, given n=$n")
-    elseif n%2 == 0
+function generate_random_gses(
+    n::Integer;
+    other_gses::Vector=[],
+    timeout::Union{Integer,Float64}=Inf,
+    min_distance::Real=0,
+    force_land::Bool=false,
+    verbose::Bool=false,
+    seed::Union{Integer,AbstractString,Bool}=false,
+)
+    validate_non_negative_finite("n", n)
+    _validate_timeout(timeout)
+    validate_non_negative_finite("min_distance", min_distance)
+
+    seed = seed === false ? rand(1:(2^31-1)) : seed
+    if verbose
+        println("Generating $n random stations using seed $seed")
+    end
+    seed!(GS_GENERATION_RNG, seed)
+
+    gses = _to_float64.(other_gses)
+    validate_coordinates.(gses)
+
+    generated = 0
+    attempts = 0
+
+    while generated < n && attempts < timeout
+        attempts += 1
+
+        # Uniform random sampling on sphere
+        lat = acos(2 * rand(GS_GENERATION_RNG) - 1) - π/2
+        lon = π * (2 * rand(GS_GENERATION_RNG) - 1)
+
+        outside_min_distance = is_outside_min_distance(lat, lon, gses, min_distance)
+        distance_ok = min_distance == 0 || outside_min_distance
+        land_ok = !force_land || is_land(lat, lon)
+
+        if distance_ok && land_ok
+            push!(gses, _to_float64((lat, lon)))
+            generated += 1
+        end
+    end
+
+    if attempts >= timeout && verbose
+        println("Timeout reached: $generated out of $n random ground stations generated")
+    end
+
+    return gses
+end
+
+"""
+    generate_equispaced_gses(
+        n::Integer; fail_on_even::Bool=true
+    ) -> Vector{Tuple{Float64, Float64}}
+
+Generate `n` approximately equispaced ground stations over the globe using a Fibonacci
+lattice, an algorithm that only works correctly for odd `n`.
+
+If `fail_on_even` is `true`, an error is thrown for even `n`. Otherwise, `n` is set to `n+1`.
+
+# Returns
+
+  - `Vector{Tuple{Float64, Float64}}`: `(latitude, longitude)` pairs [rad] for generated
+    ground stations.
+
+# Throws
+
+  - `ErrorException`: If `n` is even and `fail_on_even` is `true`.
+"""
+function generate_equispaced_gses(n::Integer; fail_on_even::Bool=true)
+    validate_non_negative_finite("n", n)
+
+    if iseven(n) && fail_on_even
+        throw(error("Fibonacci lattice algorithm only works for odd n, got n=$n"))
+    elseif iseven(n)
         n += 1
     end
+
     gses = []
-    N = n÷2
-    ϕ = (1 + √5)/2
-    for i ∈ -N:N
-        sign = Int(i>=0)*2-1
-        lat = asin(2*i/(2*N+1))
-        lon = sign*((sign*i)%ϕ)*2π/ϕ
+
+    N = n ÷ 2
+    ϕ = (1 + √5) / 2
+
+    for i in (-N):N
+        lon_sign = sign(i) == 0 ? 1 : sign(i)
+
+        lat = asin(2 * i / (2N + 1))
+        lon = lon_sign * ((lon_sign * i) % ϕ) * 2π / ϕ
+
         if lon < -π
             lon += 2π
         end
         if lon > π
             lon -= 2π
         end
-        push!(gses, (lat, lon))
+
+        push!(gses, (Float64(lat), Float64(lon)))
     end
+
     return gses
 end
 
 """
+    generate_grid_gses(;
+        equatorial_distance_km::Integer=400,
+        discount_func::Function=lat_rad->0,
+        other_gses::Vector=[],
+        force_land::Bool=false,
+    ) -> Vector{Tuple{Float64, Float64}}
+
 Generate ground stations over a spherical grid, denser near equator.
 
 # Keyword Arguments
-- `equatorial_distance_km::Int=400`: Distance between stations at the equator.
-- `discount_func::Function=lat_rad->0`: Function adjusting distance at latitudes.
-- `other_gses::Vector=[]`: Existing ground stations to append to.
-- `force_land::Bool=false`: Only include points on land.
+
+  - `equatorial_distance_km::Integer=400`: Distance between stations at the equator [km].
+  - `discount_func::Function=lat_rad->0`: Function adjusting distance at latitudes.
+  - `other_gses::Vector=[]`: Existing ground stations to append to.
+  - `force_land::Bool=false`: Only include points on land.
 
 # Returns
-- `Vector`: A list of `(geodetic latitude in radians, geodetic longitude in radians)` tuples.
+
+  - `Vector{Tuple{Float64, Float64}}`: `(lat, lon)` pairs [rad] for generated
+    ground stations.
 """
-function generate_grid_gses(;equatorial_distance_km::Int=400, discount_func::Function=lat_rad->0, other_gses::Vector=[], force_land::Bool=false)
+function generate_grid_gses(;
+    equatorial_distance_km::Integer=400,
+    discount_func::Function=lat_rad->0,
+    other_gses::Vector=[],
+    force_land::Bool=false,
+)
+    validate_non_negative_finite("equatorial_distance_km", equatorial_distance_km)
+
     gses = copy(other_gses)
-    num_gses_layer = ceil(equatorial_circumference_km/equatorial_distance_km)
-    latitudinal_layer_delta_rad = sin_60*equatorial_distance_km/equatorial_circumference_km*2π
-    latitude_rad = 0
-    gs_layers = [(latitude_rad, 2π/num_gses_layer*gs-π) for gs ∈ 0:num_gses_layer-1]
-    append!(gses, [gs for gs ∈ gs_layers if !force_land || is_land(gs)])
-    while latitudinal_layer_delta_rad + latitude_rad < π/2
-        latitude_rad = latitude_rad + latitudinal_layer_delta_rad
+
+    num_gses_layer = ceil(EQUATORIAL_CIRCUMFERENCE_KM / equatorial_distance_km)
+    latitudinal_layer_Δrad =
+        SIN_60 * equatorial_distance_km / EQUATORIAL_CIRCUMFERENCE_KM * 2π
+    latitude_rad = 0.0
+    gs_layers = [
+        (latitude_rad, 2π / num_gses_layer * gs - π) for gs in 0:(num_gses_layer-1)
+    ]
+    append!(gses, [gs for gs in gs_layers if !force_land || is_land(gs)])
+
+    while latitudinal_layer_Δrad + latitude_rad < π/2
+        latitude_rad = latitude_rad + latitudinal_layer_Δrad
         longitudinal_distance = equatorial_distance_km + discount_func(latitude_rad)
-        num_gses_layer = ceil(equatorial_circumference_km * cos(latitude_rad) / longitudinal_distance)
-        latitudinal_layer_delta_rad = sin_60*longitudinal_distance / equatorial_circumference_km * 2π
-        gs_layers = [(sign*latitude_rad, 2π/num_gses_layer*gs-π) for gs ∈ 0:num_gses_layer-1 for sign ∈ (-1, 1)]
-        append!(gses, [gs for gs ∈ gs_layers if !force_land || is_land(gs)])
+        num_gses_layer = ceil(
+            EQUATORIAL_CIRCUMFERENCE_KM * cos(latitude_rad) / longitudinal_distance
+        )
+        latitudinal_layer_Δrad =
+            SIN_60 * longitudinal_distance / EQUATORIAL_CIRCUMFERENCE_KM * 2π
+        gs_layers = [
+            (sign*latitude_rad, 2π/num_gses_layer*gs-π) for gs in 0:(num_gses_layer-1) for
+            sign in (-1, 1)
+        ]
+        append!(gses, [gs for gs in gs_layers if !force_land || is_land(gs)])
     end
+
     return gses
 end

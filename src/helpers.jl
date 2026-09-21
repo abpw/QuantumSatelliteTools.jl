@@ -213,32 +213,17 @@ Check if `new_gs` matches an existing station in `gses` (within `atol` tolerance
 """
 function is_duplicate(new_gs::InputGS, gses::Vector; atol=1e-2)
     new_coords = _to_float64(new_gs)
-    return any(gs -> all(isapprox.(new_coords, _to_float64(gs); atol)), gses)
-end
 
-"""
-    is_outside_min_distance(
-        lat::Real, lon::Real, gses::Vector, min_distance::Real
-    ) -> Bool
+    for gs in gses
+        gs_coords = _to_float64(gs)
+        min_dim = min(length(new_coords), length(gs_coords))
 
-Check if `(lat, lon)` [rad] is at least `min_distance` [km] away from all `gses`.
+        if all(isapprox.(new_coords[1:min_dim], gs_coords[1:min_dim]; atol=atol))
+            return true
+        end
+    end
 
-# Returns
-  - `Bool`: `true` if the location is sufficiently far from all stations.
-
-# Throws
-  - `ArgumentError`: If inputs are invalid (non-finite, out of range).
-"""
-function is_outside_min_distance(lat::Real, lon::Real, gses::Vector, min_distance::Real)
-    _validate_non_negative_finite("min_distance", min_distance)
-
-    coords = _to_float64(lat, lon)
-    validate_coordinates(coords)
-
-    gses = _to_float64.(gses)
-    validate_coordinates.(gses)
-
-    return all(gs -> gs_gs_distance((lat, lon), gs) >= min_distance * 1000, gses)
+    return false
 end
 
 """
@@ -253,7 +238,7 @@ Determine if geographic coordinates `(lat, lon)` or `coords` [rad] fall on land.
 # Throws
   - `ArgumentError`: If coordinates are invalid (non-finite).
 """
-function is_land(lat::Real, lon::Real)
+function is_land(lat::Real, lon::Real, args...)
     lat, lon = _to_float64(lat, lon)
     validate_coordinates((lat, lon))
 
@@ -263,6 +248,6 @@ function is_land(lat::Real, lon::Real)
 
     return LAND_SEA_MASK[3][lon_idx, lat_idx] == 1
 end
-function is_land(coords::GS)
+function is_land(coords::InputGS)
     return is_land(coords[1], coords[2])
 end

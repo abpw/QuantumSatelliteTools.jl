@@ -1,145 +1,78 @@
 using SatelliteToolboxPropagators: Propagators, OrbitPropagatorSgp4
+using SatelliteToolboxBase: JD_J2000
+
+using ..constants: SECONDS_PER_DAY
+using ..types: GS, Propagator, Node, Link
+using ..helpers: is_satellite, is_ground_station, _seconds_to_JD
+using ..helpers: validate_non_negative_finite
+using ..FreespaceChannels: AbstractChannel, FreespaceChannel
 using ..GenerateSatellites: generate_regular_array_TLEs
-using ..FreespaceChannels: FreespaceChannel, AbstractChannel
 using ..LossCalculation: total_loss
 
-# Ground stations are represented as (latitude_rad, longitude_rad) tuples.
-const GroundStation = Tuple{Float64,Float64}
-const Propagator = OrbitPropagatorSgp4{Float64,Float64}
-
 """
-Enum identifying the role or type of a node in the quantum network.
+    build_optimized_constellation(; orbits::Integer=10) -> Vector{Propagator}
 
-# Variants
-- `sat`: A satellite node.
-- `gs`: A primary ground station node.
-- `aux_gs`: An auxiliary ground station node.
-"""
-@enum NodeTypes begin
-    satellite
-    ground_station
-end
-
-"""
-A label for a node in the network graph.
-
-# Fields
-- `type::NodeTypes`: The type of the node (e.g., satellite, ground station).
-- `tags::Vector{String}`: Additional tags for the node
-    (e.g., aux for ground stations).
-"""
-struct NodeLabel
-    type::NodeTypes
-    tags::Vector{String}
-end
-
-"""
-Function for making an ID counter closure.
-"""
-function make_id_counter()
-    count = 0
-    return () -> (count += 1)
-end
-
-next_node_id = make_id_counter()
-next_link_id = make_id_counter()
-
-"""
-A node in the network graph representing either a propagator or ground station.
-
-# Fields
-- `id::Int`: Unique identifier for the node.
-- `obj::Union{Propagator, GroundStation}`: The underlying object.
-- `weight::Float64`: Weight associated with the node, used in graph algorithms.
-- `labels::Vector{NodeLabels}`: Collection of labels describing node properties.
-"""
-struct Node
-    id::Int
-    obj::Union{Propagator,GroundStation}
-    weight::Float64
-    label::NodeLabel
-
-    Node(obj, weight, label) = new(next_node_id(), obj, weight, label)
-end
-
-"""
-A communication link between two nodes over a freespace channel.
-
-# Fields
-- `id::Int`: Unique identifier for the link.
-- `node1::Node`: One endpoint of the link.
-- `node2::Node`: The other endpoint of the link.
-- `channel:: AbstractChannel`: The model of the link's physical channel.
-"""
-struct Link
-    id::Int
-    node1::Node
-    node2::Node
-    channel::AbstractChannel
-
-    Link(node1, node2, channel) = new(next_link_id(), node1, node2, channel)
-end
-
-"""
-Build a synthetic constellation and initialize SGP4 propagators based on the
+Build synthetic constellation and initialize SGP4 propagators based on
 optimized inclination angles and satellite allocations discovered in
-https://arxiv.org/abs/2603.02480. The five base orbits have inclination angles 
-of 153.21, 24.72, 143.04, 69.94, and 149.05 degrees with 45, 37, 15, 1, and 2
-satellites respectively.
+https://arxiv.org/abs/2603.02480.
+
+The five base orbits have inclination angles of 153.21, 24.72, 143.04, 69.94,
+and 149.05 degrees with 45, 37, 15, 1, and 2 satellites respectively.
 
 # Keyword Arguments
-- `orbits`: Number of orbits per inclination angle (default 10).
+
+  - `orbits::Integer=10`: Number of orbits per inclination angle.
 
 # Returns
-- `Vector{Propagator}`: A vector of SGP4 propagators initialized with the
-    generated TLEs.
+
+  - `Vector{Propagator}`: SGP4 propagators initialized with generated TLEs.
 """
-function build_optimized_constellation(;
-    orbits::Int=10,
-)
+function build_optimized_constellation(; orbits::Integer=10)
     satellite_parameters = zip(
-        deg2rad.([153.21, 24.72, 143.04, 69.94, 149.05]),
-        [45, 37, 15, 1, 2],
+        deg2rad.([153.21, 24.72, 143.04, 69.94, 149.05]), [45, 37, 15, 1, 2]
     )
 
     propagators = Propagator[]
 
-    for (inclination_rad, sats_per_orbit) ∈ satellite_parameters
-        tles = generate_regular_array_TLEs(
+    for (inclination_rad, sats_per_orbit) in satellite_parameters
+        tles = generate_regular_array_TLEs(;
             orbital_planes=orbits,
             sats_per_plane=sats_per_orbit,
             altitude_km=1000,
-            inclination_rad=inclination_rad,
+            inclination_rad,
         )
 
-        append!(
-            propagators,
-            [Propagators.init(Val(:SGP4), tle) for tle ∈ tles]
-        )
+        append!(propagators, [Propagators.init(Val(:SGP4), tle) for tle in tles])
     end
     return propagators
 end
 
 """
-Create a link between two nodes if the pairwise conditions are met.
+    create_link(node1, node2, pairwise_fns; kwargs...) -> Union{Link, Nothing}
+
+Create link between two nodes if pairwise conditions are met.
 
 # Arguments
-- `node1::Node`: First node.
-- `node2::Node`: Second node.
-- `pairwise_fn::Function`: A function that takes two nodes and returns true if
+
+  - `node1::Node`: First node.
+  - `node2::Node`: Second node.
+  - `pairwise_fns::Vector{<:Function}`: Functions that take two nodes and return true if
     conditions are met, or false otherwise.
 
 # Keyword Arguments
-- `kwargs...`: Additional keyword arguments to pass to Link.
+
+  - `kwargs...`: Additional keyword arguments to pass to Link.
 
 # Returns
-- `Union{Link, Nothing}`: The created link if conditions are met,
-    or `nothing` otherwise.
+
+  - `Union{Link, Nothing}`: New link if conditions are met, or `nothing` otherwise.
 """
 function create_link(node1::Node, node2::Node, pairwise_fns::Vector{<:Function}; kwargs...)
-    for pairwise_fn ∈ pairwise_fns
+    for pairwise_fn in pairwise_fns
         if pairwise_fn(node1, node2)
-            channel::Union{FreespaceChannel,Nothing} = FreespaceChannel(node1.obj, node2.obj; kwargs...)
+            channel = FreespaceChannel(
+                node1.obj, node2.obj; kwargs...
+            )
             if (!isnothing(channel))
                 return Link(node1, node2, channel)
             end
@@ -149,124 +82,160 @@ function create_link(node1::Node, node2::Node, pairwise_fns::Vector{<:Function};
 end
 
 """
-Dual downlink pairwise function that checks if one node is a satellite and the
-other is a ground station.
+    downlink_pairwise_fn(node1::Node, node2::Node) -> Bool
 
-# Arguments
-- `node1::Node`: First node.
-- `node2::Node`: Second node.
-
-# Returns
-- `Bool`: `true` if one node is a satellite and the other is a ground station,
-  `false` otherwise.
+Check if `node1` and `node2` are a satellite and a ground station.
 """
 function downlink_pairwise_fn(node1::Node, node2::Node)
-    return ((node1.label.type == satellite && node2.label.type == ground_station) ||
-            (node1.label.type == ground_station && node2.label.type == satellite))
+    return (is_satellite(node1) && is_ground_station(node2)) ||
+        (is_ground_station(node1) && is_satellite(node2))
 end
 
 """
-Inter-satellite pairwise function that checks if both nodes are satellites.
+    intersat_pairwise_fn(node1::Node, node2::Node) -> Bool
 
-# Arguments
-- `node1::Node`: First node.
-- `node2::Node`: Second node.
-
-# Returns
-- `Bool`: `true` if both nodes are satellites, `false` otherwise.
+Check if `node1` and `node2` are both satellites.
 """
 function intersat_pairwise_fn(node1::Node, node2::Node)
-    return node1.label.type == satellite && node2.label.type == satellite
+    return is_satellite(node1) && is_satellite(node2)
 end
 
 """
-Default evaluation function that computes the total transmissivity across all
-links.
+    default_evaluation_fn(links::Vector{Link}) -> Float64
 
-# Arguments
-- `links::Vector{Link}`: A vector of links to evaluate.
-
-# Returns
-- `Float64`: The total transmissivity across all links.
+Compute total transmissivity across all `links`.
 """
 function default_evaluation_fn(links::Vector{Link})
     if isempty(links)
         return 0.0
     end
-    return sum(1 - total_loss(link.channel) for link ∈ links)
+    return sum(1 - total_loss(link.channel) for link in links)
 end
 
 """
+    simulate_step(
+        pairwise_fns::Vector{<:Function}, evaluation_fn::Function,
+        nodes::Vector{Node}, time::Real;
+        transmitter_diameter_m::Real=0.6, receiver_diameter_m::Real=0.6,
+        wavelength_nm::Real=1550.0,
+    ) -> Any
+
 Perform a single time step of the simulation, applying the evaluation function.
 
+# Arguments
+
+  - `pairwise_fns::Vector{<:Function}`: Functions with signature `(::Node, ::Node) -> Bool`
+    to identify valid pairs of nodes for link creation.
+  - `evaluation_fn`: Function with signature `(::Vector{Link}) -> Any` to evaluate current
+    state of network links.
+  - `nodes::Vector{Node}`: Nodes in network (satellites and ground stations).
+  - `time::Real`: Current time step [s].
+
 # Keyword Arguments
-- `nodes`: vector of nodes (satellites and ground stations).
-- `evaluation_fn`: function that takes the current set of freespace channels
-    and their endpoints and returns a metric.
-- `time`: current time step in seconds.
+
+  - `transmitter_diameter_m::Real=0.6`: Transmitting telescope diameter [m].
+  - `receiver_diameter_m::Real=0.6`: Receiving telescope diameter [m].
+  - `wavelength_nm::Real=1550.0`: Wavelength [nm].
 
 # Returns
-- The result of the evaluation function.
+
+  - `Any`: The result of the evaluation function.
 """
 function simulate_step(
     pairwise_fns::Vector{<:Function},
     evaluation_fn::Function,
     nodes::Vector{Node},
-    time::Float64;
-    tx_aperture_m::Float64=0.6,
-    rx_aperture_m::Float64=0.6,
-    wavelength_nm::Float64=1550.0,
+    time::Real;
+    transmitter_diameter_m::Real=0.6,
+    receiver_diameter_m::Real=0.6,
+    wavelength_nm::Real=1550.0,
 )
-    # get links for all valid pairs of nodes
-    links = Link[]
-    for i ∈ 1:length(nodes)
-        for j ∈ (i+1):length(nodes)
+    links::Vector{Link} = []
+    for i in 1:length(nodes)
+        for j in (i+1):length(nodes)
             link = create_link(
                 nodes[i],
                 nodes[j],
-                pairwise_fns,
-                time=time,
-                transmitter_diameter_m=tx_aperture_m,
-                receiver_diameter_m=rx_aperture_m,
-                wavelength_nm=wavelength_nm
+                pairwise_fns;
+                time,
+                transmitter_diameter_m,
+                receiver_diameter_m,
+                wavelength_nm,
             )
             if !isnothing(link)
                 push!(links, link)
             end
         end
     end
-    # apply the evaluation function to the current state of the channels
+
     return evaluation_fn(links)
 end
 
 """
-Simulate the constellation performance over a specified duration and time step.
+    simulate(nodes::Vector{Node}, duration_s::Integer, step_s::Integer) -> Vector{Any}
+
+Simulate network behavior over a specified duration and time step.
+
+# Arguments
+
+  - `nodes::Vector{Node}`: Nodes in network (satellites and ground stations).
+  - `duration_s::Integer`: Total simulation duration [s].
+  - `step_s::Integer`: Time step for simulation [s].
+
+# Keyword Arguments
+
+  - `epoch::Real=JD_J2000`: Epoch time for simulation [Julian date].
+  - `pairwise_fns::Vector{<:Function}=[downlink_pairwise_fn]`: Functions with signature
+    `(::Node, ::Node) -> Bool` to identify valid pairs of nodes for link creation.
+  - `evaluation_fn::Function=default_evaluation_fn`: Function with signature
+    `(::Vector{Link}) -> Any` to evaluate current state of network links.
+  - `transmitter_diameter_m::Real=0.6`: Transmitting telescope diameter [m].
+  - `receiver_diameter_m::Real=0.6`: Receiving telescope diameter [m].
+  - `wavelength_nm::Real=1550.0`: Wavelength [nm].
+
+# Returns
+
+  - `Vector{Any}`: Results of the evaluation function at each time step.
+
+# Throws
+
+  - `ArgumentError`: If any of the input parameters are invalid.
 """
 function simulate(
     nodes::Vector{Node},
-    duration_s::Int,
-    step_s::Int;
+    duration_s::Integer,
+    step_s::Integer;
+    epoch::Real=JD_J2000,
     pairwise_fns::Vector{<:Function}=[downlink_pairwise_fn],
     evaluation_fn::Function=default_evaluation_fn,
-    tx_aperture_m::Float64=0.6,
-    rx_aperture_m::Float64=0.6,
-    wavelength_nm::Float64=1550.0,
+    transmitter_diameter_m::Real=0.6,
+    receiver_diameter_m::Real=0.6,
+    wavelength_nm::Real=1550.0,
 )
-    # collect metrics at each time step
-    metrics = []
+    validate_non_negative_finite("duration_s", duration_s)
+    validate_non_negative_finite("step_s", step_s)
+    validate_non_negative_finite("transmitter_diameter_m", transmitter_diameter_m)
+    validate_non_negative_finite("receiver_diameter_m", receiver_diameter_m)
+    validate_non_negative_finite("wavelength_nm", wavelength_nm)
+    if !isfinite(epoch)
+        throw(ArgumentError("epoch must be finite, got $epoch"))
+    end
 
-    for t ∈ 0.0:step_s:duration_s
-        # evaluate the current state of the network
+    metrics::Vector{Any} = []
+    for t in 0.0:step_s:duration_s
         println("Simulating time step $t seconds...")
-        push!(metrics, simulate_step(
-            pairwise_fns,
-            evaluation_fn,
-            nodes,
-            t,
-            tx_aperture_m=tx_aperture_m,
-            rx_aperture_m=rx_aperture_m,
-            wavelength_nm=wavelength_nm,
-        ))
+        push!(
+            metrics,
+            simulate_step(
+                pairwise_fns,
+                evaluation_fn,
+                nodes,
+                epoch + _seconds_to_JD(t);
+                transmitter_diameter_m,
+                receiver_diameter_m,
+                wavelength_nm,
+            ),
+        )
     end
 
     return metrics
