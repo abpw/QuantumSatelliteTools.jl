@@ -1,5 +1,10 @@
+using Dates: DateTime, datetime2julian
+
+using SatelliteToolboxBase: OrbitStateVector
+using SatelliteToolboxPropagators: OrbitPropagatorSgp4
+
 using ..constants: SECONDS_PER_DAY, LAND_SEA_MASK
-using ..types: Point3D, InputGS, GS, Node, satellite, ground_station
+using ..types: Point3D, InputGS, GS, Node, Time, satellite, ground_station
 
 ############################################################################################
 #                                    Arithmetic Helpers                                    #
@@ -64,20 +69,20 @@ function _parse_lat_lon(lat_str::AbstractString, lng_str::AbstractString)
 end
 
 """
-    JD_to_seconds(jd::Real) -> Float64
+    _JD_to_seconds(jd::Real) -> Float64
 
 Convert Julian days to seconds.
 """
-function JD_to_seconds(jd::Real)
+function _JD_to_seconds(jd::Real)
     return jd * SECONDS_PER_DAY
 end
 
 """
-    seconds_to_JD(seconds::Real) -> Float64
+    _seconds_to_JD(seconds::Real) -> Float64
 
 Convert seconds to Julian days.
 """
-function seconds_to_JD(seconds::Real)
+function _seconds_to_JD(seconds::Real)
     return seconds / SECONDS_PER_DAY
 end
 
@@ -86,14 +91,14 @@ end
 ############################################################################################
 
 """
-    _validate_non_negative_finite(name::AbstractString, value::Real) -> Nothing
+    validate_non_negative_finite(name::AbstractString, value::Real) -> Nothing
 
 Validate that `value` is non-negative and finite.
 
 # Throws
   - `ArgumentError`: If `value` is negative or non-finite.
 """
-function _validate_non_negative_finite(name::AbstractString, value::Real)
+function validate_non_negative_finite(name::AbstractString, value::Real)
     if value < 0 || !isfinite(value)
         throw(ArgumentError("$name must be finite and non-negative, got $value"))
     end
@@ -136,6 +141,44 @@ function validate_coordinates(lat::Real, lon::Real, height::Real)
 end
 function validate_coordinates(coords::InputGS)
     validate_coordinates(coords...)
+end
+
+"""
+    _to_JD(time::Time) -> Float64
+
+Convert a `time` value to a Float64 Julian day.
+"""
+function _to_JD(time::Time)
+    return typeof(time) == DateTime ? datetime2julian(time) : time
+end
+
+"""
+    _get_time_JD(time::Time, sat_sv::OrbitStateVector) -> Float64
+    _get_time_JD(time::Time, sat::OrbitPropagatorSgp4) -> Float64
+    _get_time_JD(time::Time, sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4) -> Float64
+
+Convert or populate `time` to a Float64 Julian day value.
+
+# Arguments
+
+  - `time::Time`: Time in Julian days or DateTime, or `missing` to use the satellite epoch.
+  - `sat_sv::OrbitStateVector`: Satellite state vector (used if `time` is missing).
+  - `sat::OrbitPropagatorSgp4`: Satellite propagator (used if `time` is missing).
+  - `sat1::OrbitPropagatorSgp4`, `sat2::OrbitPropagatorSgp4`: Two satellite propagators
+    (used if `time` is missing).
+
+# Returns
+
+  - `Float64`: Time in Julian days.
+"""
+function _get_time_JD(time::Time, sat_sv::OrbitStateVector)
+    return time === missing ? sat_sv.t : _to_JD(time)
+end
+function _get_time_JD(time::Time, sat::OrbitPropagatorSgp4)
+    return time === missing ? sat.sgp4d.epoch : _to_JD(time)
+end
+function _get_time_JD(time::Time, sat1::OrbitPropagatorSgp4, sat2::OrbitPropagatorSgp4)
+    return time === missing ? max(sat1.sgp4d.epoch, sat2.sgp4d.epoch) : _to_JD(time)
 end
 
 ############################################################################################
